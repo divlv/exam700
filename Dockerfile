@@ -31,7 +31,12 @@ RUN rm -rf ./api/modules/ingest
 
 USER appuser
 
+# AZ700_LOGS_DIR must be writable: the k8s Deployment runs this image with
+# readOnlyRootFilesystem: true, so the default (<app root>/logs, under /app)
+# would fail on the very first log line. Routing it under the same volume as
+# AZ700_DATA_DIR keeps both writable paths on the one mount the pod has.
 ENV AZ700_DATA_DIR=/data/az700 \
+    AZ700_LOGS_DIR=/data/az700/logs \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
