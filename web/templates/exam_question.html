@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Вопрос {{ runner.position }} из {{ runner.total }} — AZ-700{% endblock %}
+{% block content %}
+<div class="exam-header row row-wrap">
+  <div>
+    <h1>Вопрос {{ runner.position }} из {{ runner.total }}</h1>
+    <div class="exam-meta">№{{ question.id }} в наборе</div>
+  </div>
+  <form method="post" action="/exam/flag"
+        data-confirm="Пометить этот вопрос как некорректно вырезанный? Он будет исключён из всех будущих сессий."
+        class="exam-flag-form">
+    <button type="submit" class="btn">Вопрос некорректный</button>
+  </form>
+</div>
+
+<div class="image-viewer" data-role="exam"
+     data-showing="{{ 'answer' if revealed else 'question' }}"
+     data-question-src="{{ question_image_url }}"
+     data-answer-src="{{ answer_image_url }}">
+  <div class="image-viewer-toolbar">
+    <button type="button" class="btn" data-action="zoom-out" aria-label="Уменьшить">−</button>
+    <span class="image-viewer-zoom">100%</span>
+    <button type="button" class="btn" data-action="zoom-in" aria-label="Увеличить">+</button>
+    <button type="button" class="btn" data-action="fit-width">По ширине</button>
+    <button type="button" class="btn" data-action="actual-size">1:1</button>
+    {% if revealed %}
+    <button type="button" class="btn" id="toggle-view-btn">
+      <span id="toggle-view-label">Вопрос (перечитать)</span>
+    </button>
+    {% endif %}
+  </div>
+  <div class="image-viewer-scroll">
+    <img src="{{ answer_image_url if revealed else question_image_url }}"
+         alt="{{ 'Ответ на вопрос' if revealed else 'Текст вопроса' }} №{{ question.id }}">
+  </div>
+</div>
+
+<div class="action-bar">
+  {% if not revealed %}
+  <a href="/exam/answer" class="btn btn-primary btn-block" id="reveal-btn">Показать ответ <span style="opacity:.8">(Пробел)</span></a>
+  {% else %}
+  <div class="grade-buttons">
+    <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="grade" value="correct">
+      <button type="submit" class="btn btn-good" id="grade-correct">Правильно<small>1</small></button>
+    </form>
+    <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="grade" value="partial">
+      <button type="submit" class="btn btn-warn" id="grade-partial">Частично<small>2</small></button>
+    </form>
+    <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="grade" value="incorrect">
+      <button type="submit" class="btn btn-danger" id="grade-incorrect">Неправильно<small>3</small></button>
+    </form>
+  </div>
+  {% endif %}
+  <div class="secondary-actions">
+    <form method="post" action="/exam/abandon"
+          data-confirm="Прервать сессию? Уже выставленные оценки сохранятся.">
+      <button type="submit" class="btn-link" id="abandon-btn">Прервать (Esc)</button>
+    </form>
+  </div>
+</div>
+
+<script id="preload-urls" type="application/json">{{ preload_urls | tojson }}</script>
+{% endblock %}

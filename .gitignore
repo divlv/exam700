@@ -265,3 +265,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AZ-700 exam trainer: local runtime data (see api/modules/shared/api.py).
+# The real dataset (SQLite catalog + question/answer PNGs) lives on the K3s
+# host volume in production and is never committed here.
+/data/
+/logs/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Filled-in k8s Secret manifests (see deploy/k3s/*.example.yaml) must never be
+# committed; only the .example.yaml templates with placeholder values are.
+deploy/k3s/*-secret.yaml
+deploy/

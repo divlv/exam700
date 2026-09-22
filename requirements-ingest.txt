@@ -1,0 +1,4 @@
+# Offline dataset build only (tools/build_dataset.py). Runs on Windows, not
+# in the deployed container - do not add these to requirements.txt.
+pymupdf>=1.24   # rasterization of PDF pages (no text layer in the source files)
+pillow>=10.0    # image cropping, vertical stitching, thumbnails

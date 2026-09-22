@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Администрирование — AZ-700{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Администрирование</h1>
+  <a href="/" class="btn">В меню</a>
+</div>
+
+<div class="tabs">
+  <a href="/admin?tab=stats" class="{{ 'active' if tab == 'stats' }}">Статистика</a>
+  <a href="/admin?tab=broken" class="{{ 'active' if tab == 'broken' }}">Некорректные</a>
+  <a href="/admin?tab=unanswered" class="{{ 'active' if tab == 'unanswered' }}">Без ответа</a>
+</div>
+
+{% if tab == "stats" %}
+<div class="section">
+  <p class="muted">Сброс удаляет сессию и её оценки безвозвратно. Каталог вопросов и отметки не затрагиваются.</p>
+  {% if sessions|length == 0 %}
+  <p class="muted">Сессий ещё не было.</p>
+  {% else %}
+  <table class="responsive">
+    <thead><tr><th>Начата</th><th>Учтено</th><th>Итог</th><th>Статус</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td data-label="Начата">{{ s.session.started_at.replace("T", " ")[:16] }}</td>
+        <td data-label="Учтено">{{ s.tally.total }} из {{ s.session.planned_count }}</td>
+        <td data-label="Итог">
+          {% if s.tally.total == 0 %}<span class="muted">нет зачтённых</span>
+          {% else %}{{ s.tally.correct }} ({{ "%.0f"|format(s.tally.percent_correct) }}%){% endif %}
+        </td>
+        <td data-label="Статус">
+          {% if s.session.status == "completed" %}завершена
+          {% elif s.session.status == "abandoned" %}прервана
+          {% else %}не завершена{% endif %}
+        </td>
+        <td data-label="">
+          <form method="post" action="/admin/sessions/{{ s.session.id }}/reset"
+                data-confirm="Сбросить сессию от {{ s.session.started_at.replace('T',' ')[:16] }}? Действие необратимо.">
+            <button type="submit" class="btn">Сбросить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/admin/sessions/reset-all" style="margin-top:16px;"
+        data-confirm="Сбросить ВСЮ статистику по всем сессиям? Действие необратимо.">
+    <button type="submit" class="btn btn-danger">Сбросить всю статистику</button>
+  </form>
+  {% endif %}
+</div>
+
+{% elif tab == "broken" %}
+<div class="section">
+  <div class="row">
+    <h2>Некорректные вопросы ({{ broken|length }})</h2>
+    {% if broken|length > 0 %}
+    <form method="post" action="/admin/broken/clear" data-confirm="Снять ВСЕ отметки о некорректных вопросах?">
+      <button type="submit" class="btn btn-danger">Очистить все отметки</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if broken|length == 0 %}
+  <p class="muted">Отмеченных вопросов нет.</p>
+  {% else %}
+  {% for item in broken %}
+  <details class="answer-row">
+    <summary>
+      <span>№{{ item.mark.question.id }} <span class="muted">(источник {{ item.source_label }})</span></span>
+      <span class="muted">{{ item.mark.marked_at.replace("T", " ")[:16] }}</span>
+    </summary>
+    <div class="answer-row-body">
+      <p class="muted">Вопрос</p>
+      <img src="{{ item.question_image_url }}" alt="Текст вопроса №{{ item.mark.question.id }}" loading="lazy">
+      <p class="muted">Ответ</p>
+      <img src="{{ item.answer_image_url }}" alt="Ответ на вопрос №{{ item.mark.question.id }}" loading="lazy">
+      <form method="post" action="/admin/broken/{{ item.mark.question.id }}/unmark">
+        <button type="submit" class="btn">Снять отметку</button>
+      </form>
+    </div>
+  </details>
+  {% endfor %}
+  {% endif %}
+</div>
+
+{% else %}
+<div class="section">
+  <h2>Без ответа в исходнике ({{ unanswered|length }})</h2>
+  <p class="muted">Источник не напечатал ответ для этих вопросов — они никогда не участвуют в сессиях и не могут быть восстановлены.</p>
+  {% if unanswered|length == 0 %}
+  <p class="muted">Таких вопросов нет.</p>
+  {% else %}
+  <p>{% for q in unanswered %}№{{ q.id }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  <p class="muted">Всего: {{ unanswered|length }}</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

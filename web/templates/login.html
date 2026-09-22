@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход — AZ-700{% endblock %}
+{% block content %}
+<div class="section" style="max-width:360px;margin:15vh auto 0;">
+  <h1>AZ-700 — тренажёр экзамена</h1>
+  <p class="muted">Введите логин, чтобы продолжить.</p>
+
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field">
+      <label for="login">Логин</label>
+      <input type="text" id="login" name="login" autocomplete="username" autofocus required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">Войти</button>
+  </form>
+</div>
+{% endblock %}

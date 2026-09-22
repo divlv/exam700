@@ -1,0 +1,346 @@
+/*
+ * AZ-700 Exam Trainer - single stylesheet, mobile-first.
+ *
+ * One breakpoint (768px) separates "phone" from "everything wider". Below it,
+ * result tables collapse into stacked cards and the exam action bar sticks to
+ * the bottom of the viewport, because scrolling a six-thousand-pixel-tall
+ * question image back down to reach a grading button is not acceptable.
+ */
+
+:root {
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --text: #1f2420;
+  --muted: #6b665f;
+  --border: #ddd8d0;
+  --brand: #1c6b4f;
+  --brand-dark: #144f3a;
+  --good: #1e7d32;
+  --good-bg: #e6f4ea;
+  --bad: #b3261e;
+  --bad-bg: #fbe9e7;
+  --warn: #8a6100;
+  --warn-bg: #fdf3d9;
+  --radius: 10px;
+  --gap: 12px;
+  --touch: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171a;
+    --surface: #1c2024;
+    --text: #eef0ee;
+    --muted: #a2a7a0;
+    --border: #333a35;
+    --brand: #35a37c;
+    --brand-dark: #4bbd93;
+    --good: #6fce8a;
+    --good-bg: #163524;
+    --bad: #f28b83;
+    --bad-bg: #3a1f1c;
+    --warn: #e0bd4e;
+    --warn-bg: #3a3018;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+a { color: var(--brand-dark); }
+
+h1, h2, h3 { line-height: 1.25; margin: 0 0 8px; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+
+p { margin: 0 0 var(--gap); }
+
+.muted { color: var(--muted); }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+
+/* ---------------------------------------------------------------- layout */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px max(16px, env(safe-area-inset-left));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px max(16px, env(safe-area-inset-left)) 24px max(16px, env(safe-area-inset-right));
+}
+
+.page-wide { max-width: 960px; }
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: var(--gap);
+}
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); }
+.row-wrap { flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: var(--gap); }
+
+/* ---------------------------------------------------------------- alerts */
+
+.alert {
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: var(--gap);
+  border: 1px solid transparent;
+}
+.alert-error { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+.alert-success { background: var(--good-bg); color: var(--good); border-color: var(--good); }
+.alert-info { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+
+/* --------------------------------------------------------------- buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
+
+.btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn-good { background: var(--good); border-color: var(--good); color: #fff; }
+.btn-warn { background: var(--warn); border-color: var(--warn); color: #1f2420; }
+
+.btn-block { display: flex; width: 100%; }
+.btn-link {
+  background: none; border: none; padding: 4px 8px; color: var(--brand-dark);
+  font-weight: 600; cursor: pointer; text-decoration: underline; min-height: auto;
+}
+
+.btn-group { display: flex; flex-direction: column; gap: 10px; }
+.btn-group-row { display: flex; flex-direction: row; gap: 10px; }
+.btn-group-row .btn { flex: 1; }
+
+/* Big vertical menu buttons: the whole tappable area is at least --touch tall
+   and full-width, so a thumb on a phone cannot easily miss. */
+.menu-list { display: flex; flex-direction: column; gap: 10px; }
+.menu-list .btn { min-height: 56px; font-size: 1.05rem; justify-content: flex-start; padding-left: 20px; }
+
+/* --------------------------------------------------------------- forms */
+
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+
+input[type="text"], input[type="number"], select {
+  width: 100%;
+  min-height: var(--touch);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.option input[type="radio"], .option input[type="checkbox"] {
+  width: 22px; height: 22px; flex: none;
+}
+.option input[type="number"] { width: 100px; margin-left: auto; }
+
+.field { margin-bottom: 16px; }
+.field .hint { font-weight: 400; color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+
+/* --------------------------------------------------------------- tables */
+
+table.responsive {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+table.responsive th, table.responsive td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+table.responsive th { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+table.responsive tbody tr:hover { background: var(--bg); }
+
+@media (max-width: 768px) {
+  table.responsive thead { display: none; }
+  table.responsive, table.responsive tbody, table.responsive tr, table.responsive td { display: block; width: 100%; }
+  table.responsive tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    padding: 4px 10px;
+  }
+  table.responsive td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  table.responsive td:last-child { border-bottom: none; }
+  table.responsive td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+  }
+}
+
+/* ----------------------------------------------------------------- tabs */
+
+.tabs { display: flex; gap: 6px; margin-bottom: var(--gap); flex-wrap: wrap; }
+.tabs a {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.tabs a.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+/* ------------------------------------------------------------ exam image */
+
+.image-viewer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--gap);
+}
+.image-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+.image-viewer-toolbar .btn { min-height: 40px; padding: 6px 12px; font-weight: 700; }
+.image-viewer-zoom { min-width: 48px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+.image-viewer-status { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
+
+.image-viewer-scroll {
+  overflow: auto;
+  max-height: 70vh;
+  background: #fff;
+  text-align: center;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+.image-viewer-scroll img {
+  display: inline-block;
+  max-width: none;
+  height: auto;
+}
+
+/* --------------------------------------------------------- exam layout */
+
+.exam-header { margin-bottom: var(--gap); }
+.exam-meta { color: var(--muted); font-size: 0.92rem; }
+
+.exam-flag-form { margin-top: 4px; }
+
+/* Sticky action bar: the reason the whole layout is mobile-first. A question
+   image can be six times taller than the screen; the grading buttons must
+   never require scrolling to reach. */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  margin: 0 calc(-1 * max(16px, env(safe-area-inset-left))) 0 calc(-1 * max(16px, env(safe-area-inset-right)));
+  padding: 10px max(16px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+}
+
+.grade-buttons { display: flex; gap: 8px; }
+.grade-buttons .btn { flex: 1; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+.grade-buttons .btn small { font-weight: 400; opacity: 0.85; }
+
+.secondary-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; }
+
+/* ------------------------------------------------------------- details */
+
+details.answer-row { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+details.answer-row summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  min-height: var(--touch);
+  align-items: center;
+}
+details.answer-row summary::-webkit-details-marker { display: none; }
+details.answer-row .answer-row-body { padding: 0 14px 14px; }
+details.answer-row .answer-row-body img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+.badge-good { background: var(--good-bg); color: var(--good); }
+.badge-bad { background: var(--bad-bg); color: var(--bad); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+
+/* ------------------------------------------------------------- desktop */
+
+@media (min-width: 769px) {
+  .page { padding-top: 24px; }
+  .menu-list { max-width: 420px; }
+  .action-bar { margin: 0; border-radius: 0 0 var(--radius) var(--radius); }
+}

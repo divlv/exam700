@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Сессия от {{ detail.summary.session.started_at[:16].replace("T", " ") }} — AZ-700{% endblock %}
+{% block content %}
+{% set summary = detail.summary %}
+{% set tally = summary.tally %}
+<div class="row row-wrap">
+  <h1>Сессия от {{ summary.session.started_at.replace("T", " ")[:16] }}</h1>
+  <div class="btn-group-row">
+    <a href="/results" class="btn">К результатам</a>
+    <a href="/" class="btn">В меню</a>
+  </div>
+</div>
+
+<div class="section">
+  {% if tally.total == 0 %}
+  <p class="muted">Нет зачтённых вопросов.</p>
+  {% else %}
+  <p>
+    {% if tally.passed %}
+    <span class="badge badge-good">Сдано</span>
+    {% else %}
+    <span class="badge badge-bad">Не сдано</span>
+    {% endif %}
+    — {{ "%.1f"|format(tally.percent_correct) }}% правильных (порог 70%)
+  </p>
+  <p class="muted">
+    Зачтено {{ tally.total }} из {{ summary.session.planned_count }} ·
+    правильно {{ tally.correct }} · частично {{ tally.partial }} · неправильно {{ tally.incorrect }}
+    {% if summary.excluded %} · не учтено {{ summary.excluded }}{% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<div class="section">
+  <div class="row">
+    <h2>Разбор ({{ rows|length }})</h2>
+    <label class="option" style="margin:0;padding:8px 12px;">
+      <input type="checkbox" id="only-mistakes" {% if detail.mistakes|length > 0 %}checked{% endif %}>
+      только ошибки
+    </label>
+  </div>
+
+  {% if rows|length == 0 %}
+  <p class="muted">В этой сессии нет сохранённых ответов.</p>
+  {% else %}
+  {% for row in rows %}
+  {% set answer = row.answer %}
+  {% set is_mistake = answer.counted and answer.grade != "correct" %}
+  <details class="answer-row" data-mistake="{{ '1' if is_mistake else '0' }}">
+    <summary>
+      <span>№{{ answer.question_id }}</span>
+      <span>
+        {% if answer.grade == "correct" %}<span class="badge badge-good">правильно</span>
+        {% elif answer.grade == "partial" %}<span class="badge badge-warn">частично</span>
+        {% else %}<span class="badge badge-bad">неправильно</span>{% endif %}
+        {% if not answer.counted %}<span class="muted"> · не учтён</span>{% endif %}
+      </span>
+    </summary>
+    <div class="answer-row-body">
+      {% if row.question %}
+      <p class="muted">Вопрос</p>
+      <img src="{{ row.question_image_url }}" alt="Текст вопроса №{{ answer.question_id }}" loading="lazy">
+      <p class="muted">Ответ</p>
+      <img src="{{ row.answer_image_url }}" alt="Ответ на вопрос №{{ answer.question_id }}" loading="lazy">
+      {% if answer.counted %}
+      <form method="post" action="/results/{{ summary.session.id }}/flag"
+            data-confirm="Пометить вопрос №{{ answer.question_id }} как некорректно вырезанный?">
+        <input type="hidden" name="question_id" value="{{ answer.question_id }}">
+        <button type="submit" class="btn">Пометить некорректным</button>
+      </form>
+      {% else %}
+      <p class="muted">Уже не учитывается в статистике (помечен некорректным или без ответа в источнике).</p>
+      {% endif %}
+      {% else %}
+      <p class="muted">Вопрос №{{ answer.question_id }} отсутствует в каталоге.</p>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

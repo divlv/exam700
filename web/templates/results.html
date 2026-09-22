@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Результаты — AZ-700{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Результаты и статистика</h1>
+  <a href="/" class="btn">В меню</a>
+</div>
+
+{% if missing %}
+<div class="alert alert-error">Сессия не найдена.</div>
+{% endif %}
+
+<div class="section">
+  <h2>Всего по всем сессиям</h2>
+  {% if overview.tally.total == 0 %}
+    {% if overview.sessions == 0 %}
+    <p class="muted">Сессий ещё не было.</p>
+    {% else %}
+    <p class="muted">Нет зачтённых вопросов.</p>
+    {% endif %}
+  {% else %}
+  <div class="row row-wrap" style="text-align:center;gap:20px;">
+    <div><div style="font-size:1.4rem;font-weight:700">{{ overview.tally.total }}</div><div class="muted">Зачтено</div></div>
+    <div><div class="good" style="font-size:1.4rem;font-weight:700">{{ overview.tally.correct }} ({{ "%.0f"|format(overview.tally.percent_correct) }}%)</div><div class="muted">Правильно</div></div>
+    <div><div class="warn" style="font-size:1.4rem;font-weight:700">{{ overview.tally.partial }} ({{ "%.0f"|format(overview.tally.percent_partial) }}%)</div><div class="muted">Частично</div></div>
+    <div><div class="bad" style="font-size:1.4rem;font-weight:700">{{ overview.tally.incorrect }} ({{ "%.0f"|format(overview.tally.percent_incorrect) }}%)</div><div class="muted">Неправильно</div></div>
+  </div>
+  <p style="margin-top:12px;">
+    {% if overview.tally.passed %}
+    <span class="badge badge-good">Сдано</span>
+    {% else %}
+    <span class="badge badge-bad">Не сдано</span>
+    {% endif %}
+    — порог 70% правильных.
+  </p>
+  {% endif %}
+  <p class="muted">Сессий: {{ overview.sessions }} · завершено: {{ overview.completed_sessions }} · сдано по порогу: {{ overview.passed_sessions }}</p>
+</div>
+
+<div class="section">
+  <h2>Сессии</h2>
+  {% if sessions|length == 0 %}
+  <p class="muted">Сессий ещё не было.</p>
+  {% else %}
+  <table class="responsive">
+    <thead>
+      <tr><th>Начата</th><th>Учтено</th><th>Правильно</th><th>Частично</th><th>Неправильно</th><th>Итог</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr onclick="window.location='/results/{{ s.session.id }}'" style="cursor:pointer;">
+        <td data-label="Начата">{{ s.session.started_at.replace("T", " ")[:16] }}</td>
+        <td data-label="Учтено">{{ s.tally.total }} из {{ s.session.planned_count }}{% if s.excluded %} (−{{ s.excluded }}){% endif %}</td>
+        <td data-label="Правильно">{{ s.tally.correct }}</td>
+        <td data-label="Частично">{{ s.tally.partial }}</td>
+        <td data-label="Неправильно">{{ s.tally.incorrect }}</td>
+        <td data-label="Итог">
+          {% if s.tally.total == 0 %}
+            <span class="muted">нет зачтённых</span>
+          {% elif s.tally.passed %}
+            <span class="badge badge-good">сдано · {{ "%.0f"|format(s.tally.percent_correct) }}%</span>
+          {% else %}
+            <span class="badge badge-bad">не сдано · {{ "%.0f"|format(s.tally.percent_correct) }}%</span>
+          {% endif %}
+          {% if s.session.status == "abandoned" %}<span class="muted"> (прервана)</span>{% endif %}
+          {% if s.session.status == "in_progress" %}<span class="muted"> (не завершена)</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<a href="/admin" class="btn">Администрирование (сброс статистики, отметки)</a>
+{% endblock %}

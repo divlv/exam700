@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Новая сессия — AZ-700{% endblock %}
+{% block content %}
+<h1>Новая сессия</h1>
+<p class="muted">Доступно вопросов: {{ available }}. Вопросы выбираются случайно и не повторяются.</p>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if available == 0 %}
+<div class="alert alert-error">Нет доступных вопросов. Вернитесь в меню.</div>
+<a href="/" class="btn">В меню</a>
+{% else %}
+<form method="post" action="/session/new">
+  {% for preset in presets %}
+  <label class="option">
+    <input type="radio" name="count" value="{{ preset }}" {% if preset == default %}checked{% endif %}>
+    {{ preset }} вопросов
+  </label>
+  {% endfor %}
+
+  {% if show_all_option %}
+  <label class="option">
+    <input type="radio" name="count" value="{{ available }}" {% if default == available %}checked{% endif %}>
+    все {{ available }}
+  </label>
+  {% endif %}
+
+  <label class="option">
+    <input type="radio" name="count" value="custom"
+           {% if default not in presets and default != available %}checked{% endif %}>
+    другое количество:
+    <input type="number" name="custom_count" min="1" max="{{ available }}" value="{{ default }}">
+  </label>
+
+  <div class="btn-group" style="margin-top:16px;">
+    <button type="submit" class="btn btn-primary">Начать</button>
+    <a href="/" class="btn">Назад</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

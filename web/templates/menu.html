@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Главное меню — AZ-700{% endblock %}
+{% block content %}
+<h1>AZ-700 — тренажёр экзамена</h1>
+
+{% if total == 0 %}
+<div class="section">
+  <p><strong>Набор вопросов не подготовлен.</strong></p>
+  <p class="muted">Соберите каталог вопросов из PDF на исходной машине:</p>
+  <input type="text" readonly value="python tools\build_dataset.py" onclick="this.select()">
+</div>
+{% else %}
+<p class="muted">
+  Доступно вопросов: {{ available }} из {{ total }} · пройдено сессий: {{ overview.sessions }}
+  {% if flagged > 0 %}<br>Помечено некорректными: {{ flagged }}{% endif %}
+</p>
+
+{% if active_session %}
+<div class="alert alert-info row">
+  <span>Есть незавершённая сессия.</span>
+  <a href="/exam" class="btn btn-primary">Продолжить</a>
+</div>
+{% endif %}
+
+{% if available == 0 %}
+<div class="alert alert-error">Нет доступных вопросов для новой сессии.</div>
+{% endif %}
+
+<div class="menu-list">
+  <a href="/session/new" class="btn {{ 'btn-primary' if available > 0 else '' }}"
+     {% if available == 0 %}aria-disabled="true" onclick="return false;" style="opacity:.5;"{% endif %}>Новая сессия</a>
+  <a href="/results" class="btn">Результаты и статистика</a>
+  <a href="/admin" class="btn">Администрирование</a>
+  <a href="/settings" class="btn">Настройки</a>
+</div>
+{% endif %}
+{% endblock %}

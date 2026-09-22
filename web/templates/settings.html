@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Настройки — AZ-700{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>Настройки</h1>
+  <a href="/" class="btn">В меню</a>
+</div>
+
+{% if saved %}
+<div class="alert alert-success">Сохранено.</div>
+{% endif %}
+
+<form method="post" action="/settings" class="section stack">
+  <div class="field">
+    <label for="default_count">Количество вопросов по умолчанию</label>
+    <input type="number" id="default_count" name="default_count" min="1" max="{{ available }}" value="{{ default_count }}">
+    <div class="hint">Предлагается на экране «Новая сессия»; максимум — {{ available }} (сколько сейчас доступно).</div>
+  </div>
+
+  <label class="option">
+    <input type="checkbox" name="auto_reveal" {% if auto_reveal %}checked{% endif %}>
+    Показывать правильный ответ сразу, без нажатия «Показать ответ»
+  </label>
+
+  <button type="submit" class="btn btn-primary">Сохранить</button>
+</form>
+{% endblock %}
