@@ -24,10 +24,12 @@ def test_full_session_can_be_played_to_the_end(logged_in_client):
     start = logged_in_client.post("/session/new", data={"count": "3"})
     assert start.status_code == 200
     assert "Вопрос 1 из 3" in start.text
+    assert 'data-action="copy-image"' in start.text
 
     answer = logged_in_client.get("/exam/answer")
     assert answer.status_code == 200
     assert 'id="grade-correct"' in answer.text
+    assert 'data-action="copy-image"' in answer.text
 
     second = logged_in_client.post("/exam/grade", data={"grade": "correct"})
     assert "Вопрос 2 из 3" in second.text

@@ -61,6 +61,7 @@
         else if (action === "zoom-out") zoomBy(1 / ZOOM_STEP);
         else if (action === "fit-width") fitToWidth();
         else if (action === "actual-size") actualSize();
+        else if (action === "copy-image") copyImageToClipboard(img, button);
       });
     });
 
@@ -113,6 +114,68 @@
   /** Ctrl/Cmd+wheel zoom needs a non-passive listener registered on load. */
   function initImageViewers() {
     document.querySelectorAll(".image-viewer").forEach(initImageViewer);
+  }
+
+  /** Triggers a normal browser download of the given URL - the fallback when clipboard image support is missing. */
+  function downloadImage(url) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = url.split("/").pop() || "image.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  /** Shows a temporary status word on the button, then restores its original label. */
+  function flashButtonLabel(button, originalLabel, text, holdMs) {
+    button.textContent = text;
+    setTimeout(() => {
+      button.textContent = originalLabel;
+      button.disabled = false;
+    }, holdMs);
+  }
+
+  /**
+   * Copies whichever image is currently shown (question or answer, following
+   * the F2 toggle) to the system clipboard as a PNG, so it can be pasted
+   * straight into another app (e.g. ChatGPT) for a second opinion.
+   *
+   * The fetched bytes are passed to ClipboardItem as a Promise rather than an
+   * already-resolved Blob, and `navigator.clipboard.write` is called without
+   * an intervening `await` - both deliberate, so the call chain stays inside
+   * the click's user-activation window that Safari enforces strictly. When
+   * the Clipboard API for images is unavailable (insecure origin, older
+   * Firefox), the image downloads instead so it can still be attached by hand.
+   */
+  function copyImageToClipboard(img, button) {
+    const url = img.src;
+    if (!url) return;
+
+    const originalLabel = button.textContent;
+    button.disabled = true;
+
+    const canWriteImages = Boolean(
+      window.ClipboardItem && navigator.clipboard && navigator.clipboard.write
+    );
+    if (!canWriteImages) {
+      downloadImage(url);
+      flashButtonLabel(button, originalLabel, "Файл скачан", 2000);
+      return;
+    }
+
+    const blobPromise = fetch(url, { credentials: "same-origin" }).then((response) => {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.blob();
+    });
+
+    navigator.clipboard
+      .write([new ClipboardItem({ "image/png": blobPromise })])
+      .then(() => flashButtonLabel(button, originalLabel, "Скопировано!", 1500))
+      .catch((error) => {
+        console.warn("clipboard copy failed, falling back to download:", error);
+        downloadImage(url);
+        flashButtonLabel(button, originalLabel, "Не удалось — файл скачан", 2500);
+      });
   }
 
   /**
