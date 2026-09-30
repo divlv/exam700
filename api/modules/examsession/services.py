@@ -20,6 +20,8 @@ import sqlite3
 
 from api.modules.examsession import repo
 from api.modules.examsession.domain import (
+    FULL_CREDIT,
+    PARTIAL_CREDIT_PERCENT,
     STATUS_ABANDONED,
     STATUS_COMPLETED,
     STATUS_IN_PROGRESS,
@@ -45,6 +47,21 @@ DEFAULT_AUTO_REVEAL = False
 
 class NoQuestionsAvailable(RuntimeError):
     """Raised when a session cannot be started because the pool is too small."""
+
+
+def _credit_for(grade: str) -> int:
+    """
+    Points a grade earns under the scoring rule in force now, in hundredths.
+
+    Called once, when the answer is graded, and the result is stored on the
+    answer. Statistics read the stored value and never call this, which is what
+    keeps a later change to the rule from re-scoring past sessions.
+    """
+    if grade == questionbank.GRADE_CORRECT:
+        return FULL_CREDIT
+    if grade == questionbank.GRADE_PARTIAL:
+        return PARTIAL_CREDIT_PERCENT
+    return 0
 
 
 def ensure_schema(conn: sqlite3.Connection) -> int:
@@ -201,7 +218,12 @@ class SessionRunner:
             raise ValueError("The session has no question left to grade")
 
         repo.record_grade(
-            self._conn, self.session.id, question.id, self.position, grade
+            self._conn,
+            self.session.id,
+            question.id,
+            self.position,
+            grade,
+            _credit_for(grade),
         )
         self._graded += 1
         self._index += 1
@@ -382,12 +404,19 @@ def resume_session(
 # ---------------------------------------------------------------------------
 
 
-def _tally(grades: list[str]) -> Tally:
-    """Count a list of grade strings into a :class:`Tally`."""
+def _tally(answers: list[tuple[str, int]]) -> Tally:
+    """
+    Count ``(grade, credit)`` pairs into a :class:`Tally`.
+
+    The credit is the value stored with each answer, not recomputed from the
+    grade, so sessions graded under an older scoring rule keep their figures.
+    """
+    grades = [grade for grade, _ in answers]
     return Tally(
         correct=grades.count(questionbank.GRADE_CORRECT),
         partial=grades.count(questionbank.GRADE_PARTIAL),
         incorrect=grades.count(questionbank.GRADE_INCORRECT),
+        credit=sum(credit for _, credit in answers),
     )
 
 
@@ -412,13 +441,13 @@ def list_sessions(conn: sqlite3.Connection) -> list[SessionSummary]:
     """
     available = _available_set(conn)
 
-    by_session: dict[int, list[str]] = {}
+    by_session: dict[int, list[tuple[str, int]]] = {}
     recorded: dict[int, int] = {}
     for row in repo.list_all_answers(conn):
         session_id = row["session_id"]
         recorded[session_id] = recorded.get(session_id, 0) + 1
         if row["question_id"] in available:
-            by_session.setdefault(session_id, []).append(row["grade"])
+            by_session.setdefault(session_id, []).append((row["grade"], row["credit"]))
 
     return [
         SessionSummary(
@@ -451,13 +480,14 @@ def get_session_detail(
             grade=row["grade"],
             answered_at=row["answered_at"],
             counted=row["question_id"] in available,
+            credit=row["credit"],
         )
         for row in repo.list_answers(conn, session_id)
     )
 
     summary = SessionSummary(
         session=session,
-        tally=_tally([a.grade for a in answers if a.counted]),
+        tally=_tally([(a.grade, a.credit) for a in answers if a.counted]),
         recorded=len(answers),
     )
     return SessionDetail(summary=summary, answers=answers)
@@ -472,15 +502,15 @@ def get_overview(conn: sqlite3.Connection) -> Overview:
     percentage of answers.
     """
     summaries = list_sessions(conn)
-    grades: list[str] = []
+    answers: list[tuple[str, int]] = []
 
     available = _available_set(conn)
     for row in repo.list_all_answers(conn):
         if row["question_id"] in available:
-            grades.append(row["grade"])
+            answers.append((row["grade"], row["credit"]))
 
     return Overview(
-        tally=_tally(grades),
+        tally=_tally(answers),
         sessions=len(summaries),
         completed_sessions=sum(
             1 for s in summaries if s.session.status == STATUS_COMPLETED

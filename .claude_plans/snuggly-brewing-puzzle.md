@@ -1,276 +1,93 @@
-# AZ-700 Exam Simulator — веб-версия на K3s
+# Частично правильный ответ = 0.34 балла (только для новых ответов)
 
 ## Context
 
-Существующий десктопный тренажёр AZ-700 (`sample/`, tkinter + модулитный бэкенд) полностью реализован и покрыт тестами: 369 вопросов нарезаны из 74 PDF в 738 PNG, каталог и статистика лежат в SQLite. Работает он только на одной машине под Windows.
+Сейчас «Частично» в статистике ничего не стоит: `Tally.percent_correct` считает только `correct`, а `partial` лишь раздувает знаменатель. Пользователь хочет, чтобы частично правильный ответ давал **34% от полного балла за вопрос**, и чтобы процент считался правильно для любого размера набора (3, 5, 10, 20 …).
 
-Нужна веб-версия того же функционала, чтобы заниматься с любого устройства — **включая смартфон**. Приложение однопользовательское; HA и многопользовательский доступ не нужны. Доступ ограничивается хардкод-логином `dima` без пароля.
+Пример: из 10 вопросов 8 правильно, 1 частично, 1 неправильно → `8 + 0.34 = 8.34` из 10 → **83.4%**.
 
-Результат: публичный Docker-образ в `ghcr.io/divlv/exam700`, развёрнутый как pod со стандартным приоритетом на личном K3s-сервере пользователя (`myk3s`, `37.27.214.42`), с SQLite и картинками на диске ноды и HTTPS на `az700.v1.lv`. Манифесты пользователь применяет вручную.
+**Уточнение после первой версии плана:** старые оценки пересчитывать **не нужно** — новое правило действует только на будущие ответы. Поэтому балл нельзя вычислять «на лету» из `grade` (тогда пересчитались бы все прошлые сессии). Вместо этого каждый ответ в момент оценки **запоминает, сколько баллов он получил**.
 
-### Исходные данные, установленные при исследовании
-
-| | |
-|---|---|
-| Репозиторий | `github.com/divlv/exam700`, публичный, сейчас содержит только `LICENSE`/`README.md`/`.gitignore` |
-| Датасет | 738 PNG, 166.5 МБ (медиана 147 КБ, p90 415 КБ, max 3.1 МБ), ширина 1355 px, высота до 6399 px |
-| Живая БД | 369 вопросов, 60 без ответа в исходнике, 12 помечены некорректными → **297 доступных**; 10 сессий, 71 оценка |
-| Нода | одна, `myk3s`, **amd64**, k3s v1.33.4, Ubuntu 24.04, 98 ГБ свободно на `/` |
-| **Ограничение** | нода зарезервирована на 96% памяти: свободно ≈550m CPU и ≈**497Mi** под requests |
-| Namespace | `mywebs` (единственный пользовательский) |
-| TLS | Traefik 3.3.6 c собственным ACME, certresolver `prod`. **cert-manager не установлен.** HTTP→HTTPS редирект глобальный на entrypoint |
-| Хранилище | конвенция — ручной hostPath PV `/data/<app>`, `storageClassName: manual`, `Retain`, `DirectoryOrCreate`, 2Gi. `local-path` не используется нигде |
-| Приоритеты | `low-priority` (value 10) — `globalDefault: true`; это и есть «стандартный». `high-priority` вытеснил бы работающие сайты |
-| Локальное окружение | Docker **нет**, kubectl **нет**, есть `gh` 2.85 и Python 3.14.2 |
-
-### Принятые решения
-
-- Контент (картинки + SQLite) — на диске сервера, не в образе. Образ остаётся маленьким, а нарезка чужих экзаменационных дампов не попадает в публичный репозиторий и публичный registry.
-- Сборка — GitHub Actions → GHCR (локального Docker нет). Публичный пакет ⇒ `imagePullSecrets` не нужен.
-- Стек — FastAPI + Jinja2, серверный рендеринг. Слой `web/` заменяет `gui/`, `api/modules/*` переиспользуется.
-- Переносим все семь экранов 1:1.
-- План сессии сохраняется в БД (см. ADR ниже) — иначе мобильный браузер, выгрузив вкладку, потеряет незавершённый экзамен.
-- Service — `ClusterIP:80`, не `LoadBalancer`: каждый LB порождает лишний pod `svclb-*` (их уже 11), а памяти на ноде в обрез. Совпадает с новейшим стилем `spisokvdorogu-*`.
-- Тег `:latest` + `imagePullPolicy: Always`; обновление = push → CI → `drestart az700` на сервере, манифест править не нужно.
-- Контейнер от uid 1000; `/data/az700` создаётся вручную с `chmod 777` — ровно как `kuber.sh` уже делает для `/data/postgres`.
-- Картинки отдаются как есть, с иммутабельным кэшем и предзагрузкой следующей.
-
----
-
-## Раскладка репозитория
-
-Всё новое — в корне `exam700`. Каталоги `sample/` и `sample-k3s/` остаются untracked референсами; **их не трогаем**.
+## Формула (общая для любого N)
 
 ```
-api/modules/{shared,questionbank,examsession,ingest}/   перенос из sample/ без изменений API
-web/
-  main.py            фабрика FastAPI, lifespan (миграции), SessionMiddleware, статика
-  deps.py            соединение SQLite на запрос, require_login
-  auth.py            /login, /logout, проверка логина
-  routes/            menu, session, exam, results, admin, settings, images, health
-  templates/         base.html + по шаблону на экран
-  static/            app.css, app.js, manifest.json, icon-192.png, icon-512.png
-tools/build_dataset.py                 offline-утилита под Windows (без изменений)
-tests/                                 перенос модульных тестов + новые web-тесты
-CONTEXT.md                             глоссарий предметной области
-docs/deploy-k3s.md                     операторская инструкция
-docs/adr/0001-persist-session-plan.md
-deploy/k3s/                            манифесты и скрипты
-Dockerfile
-requirements.txt          fastapi, uvicorn[standard], jinja2, itsdangerous
-requirements-ingest.txt   pymupdf, pillow          (только для Windows, в образ не идёт)
-requirements-dev.txt      pytest, httpx
-.github/workflows/docker.yml
+credit ответа (в сотых долях балла): correct = 100, partial = 34, incorrect = 0
+points        = сумма credit / 100                  # максимум = total
+score_percent = сумма credit / total                # = 100 * points / total
 ```
 
----
+Целые числа, без накопления `0.34` во float: нет ошибки округления, а порог 70% сравнивается точно (деление целых даёт ровно 70.0, когда истинное частное равно 70).
 
-## 1. Бэкенд: что переиспользуется и что меняется
-
-`api/modules/*` не импортирует tkinter — контракт переносится целиком. Изменения минимальны и не ломают десктопную версию и существующие тесты.
-
-### 1.1 `shared` — конфигурация путей через env
-
-Сейчас `sample/api/modules/shared/api.py` жёстко считает `PROJECT_ROOT = Path(__file__).resolve().parents[3]` и всё от него. Конфигурации нет вообще (проверено: ни `os.environ`, ни `config.json`).
-
-Добавить перекрытие переменными окружения, **сохранив текущие значения по умолчанию**:
-
-| Переменная | По умолчанию | В контейнере |
+| N | 1 правильный | 1 частичный |
 |---|---|---|
-| `AZ700_DATA_DIR` | `<root>/data` | `/data/az700` |
-| `AZ700_DB_PATH` | `$AZ700_DATA_DIR/az700.sqlite` | наследуется |
-| `AZ700_LOGS_DIR` | `<root>/logs` | `/data/az700/logs` |
+| 3 | 33.33 п.п. | 11.33 п.п. |
+| 5 | 20 п.п. | 6.8 п.п. |
+| 10 | 10 п.п. | 3.4 п.п. |
+| 20 | 5 п.п. | 1.7 п.п. |
 
-`IMAGES_DIR`/`REPORT_DIR` считаются от `AZ700_DATA_DIR`. Пути в БД (`images/q0001_question.png`) — относительные к `DATA_DIR`, менять их не нужно.
+`total` — по-прежнему число зачтённых ответов (вопрос ещё доступен, не помечен некорректным).
 
-### 1.2 `shared/internal/_db.py` — соединение, пригодное для ASGI
+## Как старые данные остаются нетронутыми
 
-`connect()` сейчас вызывает `sqlite3.connect(db_path)` без `check_same_thread` и без таймаута; GUI держит одно соединение на весь процесс в Tk-потоке. Для веба:
-
-- `check_same_thread=False`, `timeout=10.0`;
-- добавить `PRAGMA busy_timeout = 10000` рядом с уже существующими `foreign_keys = ON` и `journal_mode = WAL`;
-- соединение — **на запрос**, через зависимость FastAPI (`web/deps.py`), с закрытием в `finally`. Пула нет: один пользователь, один воркер.
-
-`PRAGMA foreign_keys = ON` обязателен — на нём держится `ON DELETE CASCADE` при сбросе сессии.
-
-### 1.3 `examsession` — схема v2, сохранение плана сессии
-
-Единственное содержательное изменение домена. Сейчас в `sessions` лежит только `planned_count`; вытянутый список вопросов и порядок живут в памяти `SessionRunner`.
-
-Миграция v2 (механизм `apply_migrations` уже есть и идемпотентен, применится к вашей базе автоматически при первом старте):
+Схема `examsession` **v3**: в `session_answers` новая колонка `credit INTEGER NOT NULL DEFAULT 0` + обратная заливка по **старому** правилу:
 
 ```sql
-CREATE TABLE IF NOT EXISTS session_questions (
-    session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    position    INTEGER NOT NULL,
-    question_id INTEGER NOT NULL,
-    PRIMARY KEY (session_id, position)
-);
-CREATE INDEX IF NOT EXISTS idx_session_questions_session ON session_questions(session_id);
+ALTER TABLE session_answers ADD COLUMN credit INTEGER NOT NULL DEFAULT 0
+UPDATE session_answers SET credit = 100 WHERE grade = 'correct'   -- старое правило: partial и incorrect = 0
 ```
 
-`question_id` намеренно **без** внешнего ключа — тот же принцип, что уже применён к `broken_questions` и `session_answers`: история и отметки должны переживать пересборку каталога.
+- Все существующие ответы получают ровно тот балл, который давало старое правило → цифры и вердикты прошлых сессий **не меняются** (7 правильных + 2 частичных из 10 у старой сессии так и останется 70.0%).
+- Новые ответы пишутся с `credit` по новому правилу (100 / 34 / 0). Повторная оценка того же вопроса в той же сессии перезаписывает `credit` (как уже перезаписывает `grade`).
+- Сессия, начатая до обновления и дооцениваемая после, будет смешанной: старые ответы по старому, новые по новому — это буквально «только будущие ответы».
+- Миграция выполнится сама при старте пода (как уже было с v2). Откат безопасен: старый образ колонку не использует, а при вставке без `credit` подставится `DEFAULT 0`. На всякий случай перед деплоем скопируйте `/data/az700/az700.sqlite` (каталог и так входит в `files_backup.sh`).
 
-Новое в `examsession/api.py`:
+## Допущения (скажите, если что-то не так)
 
-- `start_session(...)` — дополнительно пишет план в `session_questions`;
-- `resume_session(conn, session_id) -> SessionRunner | None` — восстанавливает runner из `session_questions` + `session_answers`;
-- `get_active_session(conn) -> ExamSession | None` — свежайшая со `status = 'in_progress'`.
+- **Порог 70% применяется к баллу** (`score_percent`), а не к доле «правильных»: `Tally.passed` = `score_percent >= 70`. Для старых сессий вердикт тот же, что и был.
+- **0.34 ровно**, как в вашем примере: три частичных дают 1.02 (чуть больше одного правильного). Максимум всё равно 100%.
+- Вес 34 — константа в коде, не настройка в UI.
+- «Разбивка по ответам» на странице результатов (`Правильно 8 (80%) / Частично 1 (10%) / Неправильно 1 (10%)`) остаётся как есть — это доля ответов по типам, а не балл.
 
-`SessionRunner.flag_broken()` при замене вопроса обязан переписать строку плана на той же `position`; при исчерпании пула — удалить хвостовую строку, чтобы `total` в БД совпадал с `total` в памяти.
+## Изменения
 
-Семантику **не меняем**: оценки `correct`/`partial`/`incorrect`, порог 70% только по `correct`, ретроактивное исключение оценок помеченных вопросов из всей статистики, `excluded = recorded - tally.total`.
+**`api/modules/examsession/repo.py`**
+- Миграция v3 (выше).
+- `record_grade(..., credit)` пишет `credit`; `list_answers` и `list_all_answers` возвращают `credit`.
 
----
+**`api/modules/examsession/domain.py`**
+- Константы `FULL_CREDIT = 100`, `PARTIAL_CREDIT_PERCENT = 34`.
+- `AnswerRecord` — новое поле `credit: int`.
+- `Tally` — новое поле `credit: int = 0` (сумма сотых долей балла зачтённых ответов) и свойства `points` (`credit / 100`) и `score_percent` (`credit / total`, `0.0` при пустом). `percent_correct/partial/incorrect` остаются «долей ответов» — обновить докстринги.
+- `passed` → `self.total > 0 and self.score_percent >= PASS_THRESHOLD_PERCENT`; обновить описание порога в шапке модуля.
 
-## 2. Веб-слой
+**`api/modules/examsession/services.py`**
+- Функция `_credit_for(grade)` (correct→100, partial→34, incorrect→0, через `questionbank.GRADE_*`); `SessionRunner.grade` передаёт её результат в `repo.record_grade`.
+- `_tally` принимает пары `(grade, credit)` и суммирует `credit`; вызовы в `list_sessions`, `get_session_detail`, `get_overview` передают `credit` из строк БД. `AnswerRecord(...)` создаётся с `credit`.
 
-Post-Redirect-Get на всех действиях — чтобы «назад» и перезагрузка на телефоне не пересылали форму.
+**`api/modules/examsession/api.py`** — экспортировать `PARTIAL_CREDIT_PERCENT`.
 
-| Маршрут | Назначение |
-|---|---|
-| `GET/POST /login`, `POST /logout` | одно поле «логин», сверка с `dima` |
-| `GET /` | главное меню: доступно вопросов, пройдено сессий, отметки; баннер «Продолжить сессию», если есть активная |
-| `GET/POST /session/new` | единственная опция — количество вопросов (пресеты 10/20/30/50/100 + произвольное, потолок = доступным) |
-| `GET /exam` | текущий вопрос |
-| `GET /exam/answer` | ответ + кнопки оценки (отдельный URL вместо флага в памяти) |
-| `POST /exam/grade` · `/flag` · `/abandon` | действия |
-| `GET /results` · `GET /results/{id}` | сводка и разбор сессии |
-| `GET /admin` + POST-действия | три вкладки: статистика/сбросы, некорректные вопросы, без ответа в исходнике |
-| `GET/POST /settings` | количество по умолчанию, авто-показ ответа |
-| `GET /img/{name}.png` | отдача из `DATA_DIR/images`, имя валидируется по `^q\d{4}_(question\|answer)\.png$`, `Cache-Control: public, max-age=31536000, immutable` + ETag |
-| `GET /healthz` | для проб, без авторизации |
+**`web/templating.py`** — `PASS_THRESHOLD_PERCENT` и `PARTIAL_CREDIT_PERCENT` в `templates.env.globals`.
 
-**Авторизация.** `starlette.middleware.sessions.SessionMiddleware` с ключом из `AZ700_SESSION_SECRET`; cookie HttpOnly + Secure + SameSite=Lax, `max_age` 90 дней, чтобы телефон не разлогинивался. Зависимость `require_login` редиректит на `/login`. Логин `dima` — константа в `web/auth.py`. `/healthz`, `/login` и `/static` — единственные открытые маршруты.
+**Шаблоны** (`%.1f` вместо `%.0f`, иначе 83.4 округлится до 83):
+- `results.html` — сводка: плашка «Сдано/Не сдано» + `83.4% (8.34 из 10) — порог 70%` (вместо «порог 70% правильных»); колонка «Итог» в таблице сессий берёт `score_percent`; строка-пояснение «Частично правильный ответ = 0.34 балла (для ответов, выставленных после обновления)».
+- `session_detail.html` стр. 24 — `83.4% (8.34 из 10) (порог 70%)` вместо «% правильных».
+- `admin.html` стр. 30 — колонка «Итог»: `8.34 (83.4%)` вместо `8 (80%)`.
 
-**Логирование.** Переиспользуем `shared.get_logger` с существующей схемой RunId (7 символов `[a-z0-9]`, формат `... [RunId: 39z64rf] ...`). В контейнере — консоль (её собирает k8s) плюс ротируемый файл в `/data/az700/logs`. Логируем: старт и загрузку конфигурации, применённые миграции, вход/выход, начало и завершение сессии, каждую оценку, отметку некорректного вопроса, сбросы, необработанные исключения. Каждый UI-переход не логируем.
+**Документация:** `CONTEXT.md` — термин **Score/Credit** и правка **Pass threshold** (сейчас: «`partial` … earns no credit» — станет неверным для новых ответов; описать, что старые ответы хранят прежние баллы); `CONTINUITY.md` — решение, формула, миграция v3. `sample/` не трогаем.
 
----
+## Тесты
 
-## 3. Мобильная работа
+`tests/modules/examsession/test_session.py` (существующие остаются валидными — `percent_correct` сохраняет смысл доли):
+- **Миграция без пересчёта:** руками создать БД со схемой v2 (сырой SQL + строка `schema_version examsession=2`) с ответами correct/partial/incorrect, вызвать `ensure_schema` → версия 3; старые `partial` = 0 баллов, `correct` = 100, `score_percent` сессии равен прежнему «% правильных».
+- **Новое правило:** пример пользователя 8/1/1 из 10 → `points == 8.34`, `score_percent == 83.4`; параметризованно по N = 3/5/10/20 (напр. `(2,1,0)` → 78.0, `(3,2,0)` → 73.6); три частичных → `points == 1.02`.
+- **Порог:** 7/0/3 → ровно 70.0 сдано; 6/3/1 → 70.2 сдано; 6/2/2 → 66.8 не сдано; пустой → 0.0 и не сдано.
+- **Смешанная сессия:** ответы, вставленные «по-старому» (credit 0 для partial), плюс новый partial через `runner.grade` → сумма баллов учитывает оба правила.
+- Повторная оценка того же вопроса перезаписывает `credit`; `get_overview.passed_sessions` учитывает баллы.
 
-Один адаптивный шаблон, breakpoint 768px. Отдельной мобильной версии нет.
+`tests/web/test_exam_flow.py` — в `test_full_session_can_be_played_to_the_end` (correct/partial/incorrect, N=3) проверить `1.34 из 3` и `44.7%` на странице разбора.
 
-- `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">` — **без** `user-scalable=no`, нативный pinch-zoom должен работать.
-- **Липкая панель действий внизу.** Ключевое решение: медианная картинка вопроса выше экрана телефона в 5–6 раз, прокручивать её до конца ради кнопки «Правильно» неприемлемо. Панель `position: sticky; bottom: 0` с учётом `env(safe-area-inset-bottom)`.
-- Зоны нажатия ≥48px, кнопки оценок во всю ширину с разделением.
-- «Вопрос некорректный» и «Прервать» — только через подтверждение.
-- F2-попап «перечитать вопрос» на широком экране остаётся отдельной панелью; на узком заменяется переключателем **Вопрос ⇄ Ответ** на месте.
-- Просмотр картинки: по умолчанию по ширине; кнопки −/+/по ширине/1:1 работают по тапу; двойной тап переключает «по ширине ⇄ 1:1»; Ctrl+колесо на десктопе.
-- Горячие клавиши десктопа сохраняются: Пробел — показать ответ, 1/2/3 — оценка, Esc — прервать, F2 — перечитать.
-- Таблицы результатов и разбора на узком экране рендерятся карточками, без горизонтальной прокрутки.
-- Предзагрузка: сервер знает план сессии, поэтому в шаблон передаётся картинка ответа текущего вопроса и вопроса следующего — оба греются через `new Image()`.
-- `manifest.json` + иконки 192/512 — добавление на домашний экран, запуск в standalone.
+## Проверка
 
----
-
-## 4. Docker и CI
-
-**Dockerfile** — `python:3.14-slim` (совпадает с локальным 3.14.2; при отсутствии колёс для FastAPI/uvicorn откатиться на `3.13-slim` — проверить на первом прогоне CI), сборка venv отдельным слоем, пользователь uid 1000, `EXPOSE 8000`, запуск `uvicorn web.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers`. `pymupdf` в образ не ставится.
-
-**`.github/workflows/docker.yml`**
-- триггер: push в `main`;
-- `permissions: {contents: read, packages: write}`;
-- job `test`: Python 3.14, `pip install -r requirements.txt -r requirements-dev.txt`, `pytest -q`;
-- job `build` (needs test): `docker/login-action` в `ghcr.io` с `GITHUB_TOKEN`, `docker/build-push-action` с `platforms: linux/amd64`, теги `:latest` и `:${{ github.sha }}`, кэш `type=gha`.
-- После первой публикации пакет в GitHub нужно вручную переключить на Public — иначе понадобится `imagePullSecrets: github-regcred`. Шаг попадёт в инструкцию.
-
-Перед завершением работы прогнать `actionlint` на workflow.
-
----
-
-## 5. Манифесты `deploy/k3s/`
-
-Отдельный файл на часть, как в новейшем `spisokvdorogu-*`. Все namespaced-объекты — в `mywebs`.
-
-**`az700-storage.yaml`** — PV `az700-pv`: `hostPath: /data/az700`, `type: DirectoryOrCreate`, `2Gi`, `storageClassName: manual`, `persistentVolumeReclaimPolicy: Retain`. PVC `az700-content` в `mywebs` с `volumeName: az700-pv`. Точная копия схемы `zaharov-info-pv`/`zaharov-info-content`.
-
-**`az700-secret.example.yaml`** — Secret `az700-secrets`, ключ `SESSION_SECRET`, значение — плейсхолдер `<SECRET>` плюс команда генерации в комментарии. Реальное значение в репозиторий не коммитим.
-
-**`az700-app.yaml`** — Deployment + Service:
-- `replicas: 1`, `strategy: Recreate` (SQLite на RWO-томе — два pod'а одновременно недопустимы);
-- `priorityClassName: low-priority` с house-комментарием;
-- `image: ghcr.io/divlv/exam700:latest`, `imagePullPolicy: Always`, без `imagePullSecrets`;
-- `env`: `AZ700_DATA_DIR=/data/az700`, `SESSION_SECRET` из `secretKeyRef`;
-- `resources: requests {cpu 50m, memory 128Mi}, limits {cpu 500m, memory 512Mi}` — гарантированно влезает в оставшиеся 497Mi;
-- `securityContext`: `runAsNonRoot: true`, `runAsUser: 1000`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities: drop [ALL]`, `seccompProfile: RuntimeDefault`; `emptyDir` на `/tmp`;
-- startup/readiness/liveness `httpGet /healthz` на именованный порт `http`, **`timeoutSeconds: 5`** (единственный моргающий pod в кластере страдает от `timeoutSeconds: 2`);
-- том `az700-content` смонтирован в `/data/az700`;
-- Service `az700`, `type: ClusterIP`, `port: 80` → `targetPort: http`.
-
-**`az700-ingress.yaml`** — host `az700.v1.lv`, `spec.ingressClassName: traefik` (и дублирующая house-аннотация того же имени), `router.entrypoints: websecure`, `router.tls.certresolver: prod`, `router.middlewares: mywebs-server-header-mask@kubernetescrd`. Блок `tls:` содержит **только `hosts`, без `secretName`** — именно это включает ACME у Traefik. Редирект HTTP→HTTPS уже глобальный, `redirect-www` не нужен (поддомен).
-
-**`install.sh` / `uninstall.sh`** — в стиле `mywebs_install/<fqdn>.sh`: `k3s kubectl apply -f` в порядке storage → secret → app → ingress с `sleep 1`; удаление в обратном порядке (PV с `Retain` данные не тронет).
-
----
-
-## 6. Инструкция `docs/deploy-k3s.md`
-
-Операторский документ в вашем стиле: зачем каждый шаг, команда, как проверить результат, что делать при ошибке.
-
-1. Завести DNS-запись `az700.v1.lv` → `37.27.214.42` и дождаться распространения (`nslookup`). **До** применения ingress, иначе HTTP-01 challenge провалится.
-2. Сделать пакет GHCR публичным после первой сборки.
-3. Подготовить каталог и скопировать данные:
-   ```bash
-   ssh root@37.27.214.42 'mkdir -p /data/az700/images && chmod -R 777 /data/az700'
-   scp sample/data/az700.sqlite      root@37.27.214.42:/data/az700/
-   scp -r sample/data/images/*.png   root@37.27.214.42:/data/az700/images/
-   ```
-   166 МБ, пара минут. `/data` уже попадает в существующий `files_backup.sh`.
-4. Сгенерировать `SESSION_SECRET`, заполнить `az700-secret.yaml` из примера, применить.
-5. Применить манифесты по порядку, проверить каждый.
-6. Проверки: pod Running, `curl -I https://az700.v1.lv/healthz`, сертификат от Let's Encrypt, вход под `dima`, главное меню показывает **297 доступных из 369**.
-7. Обновление приложения: push → зелёный CI → `drestart az700` (или `k3s kubectl -n mywebs rollout restart deploy/az700`).
-8. Диагностика: `Pending` → не хватило памяти, смотреть `describe pod`; ошибка сертификата → DNS или логи Traefik; `unable to open database file` → права на `/data/az700`.
-
-Скриншот-плейсхолдеры: pod Running в Skooner, экран экзамена на телефоне, замок сертификата.
-
----
-
-## 7. Домен и ADR
-
-**`CONTEXT.md`** — только глоссарий, без деталей реализации. Термины, уточнённые в этой сессии: *доступный вопрос* (`has_answer = 1` и нет отметки), *зачтённый ответ* (оценка, чей вопрос доступен **сейчас**), *план сессии* (упорядоченный список вытянутых вопросов), *оценка* (правильно / частично / неправильно; частично не даёт частичного балла), *отметка «некорректный»* (глобальная и ретроактивная), *порог* (70% правильных среди зачтённых).
-
-**`docs/adr/0001-persist-session-plan.md`** — почему план сессии переехал в БД. Три критерия выполняются: обратить сложно (миграция схемы), без контекста неочевидно (десктоп жил без этого), настоящий компромисс (альтернативы — память процесса и вывод из `session_answers` — рассмотрены и отвергнуты из-за поведения мобильных браузеров).
-
----
-
-## 8. Проверка
-
-**Локально (Windows):**
-```cmd
-pytest -q
-set AZ700_DATA_DIR=C:\Work\my\AZ700ExamWebApp\sample\data
-uvicorn web.main:app --reload --port 8000
-```
-Пройти сессию из 3 вопросов целиком: вход → меню → новая сессия → показать ответ → три оценки → разбор. Отдельно проверить: отметку некорректного вопроса с заменой, сброс сессии в админке, сохранение настроек.
-
-**Мобильная проверка** — оба способа:
-- Chrome DevTools, эмуляция iPhone/Pixel: липкая панель не перекрывает контент, кнопки не мельче 48px, таблицы стали карточками, pinch-zoom работает.
-- С реального телефона по локальной сети (`uvicorn --host 0.0.0.0`, адрес `http://<ip-машины>:8000`).
-
-**Восстановление сессии** — начать экзамен, перезапустить uvicorn, открыть `/` заново: должно предложить продолжить с той же позиции и тем же списком вопросов.
-
-**Новые тесты:** миграция examsession v2 и идемпотентность; `resume_session` восстанавливает позицию, порядок и уже поставленные оценки; `flag_broken` корректно переписывает план; маршруты через `httpx.ASGITransport` — редирект неавторизованного на `/login`, полный цикл сессии, `/img/` отвергает выход за каталог (`../`, абсолютные пути).
-
-**CI:** прогон Actions зелёный, пакет виден на `ghcr.io/divlv/exam700`.
-
-**Кластер:** после применения — `k3s kubectl -n mywebs get pod,svc,ingress,pvc`, `logs deploy/az700` (видна строка RunId), `curl -I https://az700.v1.lv/healthz` возвращает 200 с валидным сертификатом.
-
----
-
-## Риски
-
-- **Память ноды.** Свободно ≈497Mi под requests. 128Mi влезают, но если другое приложение вырастет, pod встанет в `Pending`. Безопасный отказ: `low-priority` не вытесняет работающие сайты.
-- **Первый сертификат** не выпустится без живой DNS-записи.
-- **Пакет GHCR по умолчанию приватный** — забудете переключить, получите `ImagePullBackOff`.
-- **Права на `/data/az700`** — если каталог создаст kubelet (root, 0755), контейнер от uid 1000 не запишет базу. Поэтому каталог создаётся вручную до первого применения.
-- **`:latest` на одной ноде** — без `imagePullPolicy: Always` рестарт может молча не подтянуть новый образ. Политика выставлена явно.
-
-## Вне объёма
-
-OCR, многопользовательский режим, HA, пересборка датасета внутри кластера, изменения в `sample/` и `sample-k3s/`, правка ансибл-репозитория `myk3s` (в инструкции указано, куда положить файлы, если захотите закрепить их там).
-
-## Первый шаг реализации
-
-Создать `CONTINUITY.md` в корне по формату из `CLAUDE.md` и вести его дальше по ходу работы.
+1. `pytest -q` из корня репозитория (сейчас 72 passed / 28 skipped).
+2. Локально на **копии** `sample/data/az700.sqlite` (не на оригинале): запустить `uvicorn web.main:app` → миграция v2→v3 без ошибок; старые сессии в «Результатах» показывают те же проценты, что и раньше; новая сессия с оценками 8/1/1 из 10 → `8.34 из 10`, `83.4%`, «Сдано».
+3. Деплой как обычно (`git push` → CI → `drestart az700`), манифесты не меняются; после рестарта в логе пода строка `schema ... examsession=v3`.

@@ -31,8 +31,9 @@
     {% else %}
     <span class="badge badge-bad">Не сдано</span>
     {% endif %}
-    — порог 70% правильных.
+    — {{ "%.1f"|format(overview.tally.score_percent) }}% ({{ "%.2f"|format(overview.tally.points) }} из {{ overview.tally.total }}), порог {{ "%.0f"|format(PASS_THRESHOLD_PERCENT) }}%.
   </p>
+  <p class="muted">Частично правильный ответ = {{ PARTIAL_CREDIT }} балла — для ответов, выставленных после этого правила; прежние оценки сохранили свои баллы.</p>
   {% endif %}
   <p class="muted">Сессий: {{ overview.sessions }} · завершено: {{ overview.completed_sessions }} · сдано по порогу: {{ overview.passed_sessions }}</p>
 </div>
@@ -58,9 +59,9 @@
           {% if s.tally.total == 0 %}
             <span class="muted">нет зачтённых</span>
           {% elif s.tally.passed %}
-            <span class="badge badge-good">сдано · {{ "%.0f"|format(s.tally.percent_correct) }}%</span>
+            <span class="badge badge-good">сдано · {{ "%.1f"|format(s.tally.score_percent) }}%</span>
           {% else %}
-            <span class="badge badge-bad">не сдано · {{ "%.0f"|format(s.tally.percent_correct) }}%</span>
+            <span class="badge badge-bad">не сдано · {{ "%.1f"|format(s.tally.score_percent) }}%</span>
           {% endif %}
           {% if s.session.status == "abandoned" %}<span class="muted"> (прервана)</span>{% endif %}
           {% if s.session.status == "in_progress" %}<span class="muted"> (не завершена)</span>{% endif %}

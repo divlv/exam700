@@ -80,6 +80,21 @@ _MIGRATIONS: list[tuple[int, list[str]]] = [
             "CREATE INDEX IF NOT EXISTS idx_session_questions_session ON session_questions(session_id)",
         ],
     ),
+    (
+        3,
+        [
+            # Each answer remembers the credit it earned when it was graded, in
+            # hundredths of a point (100 = fully correct). The scoring rule can
+            # then change for future answers without re-scoring history: a
+            # score computed on the fly from `grade` would retroactively
+            # re-score every past session.
+            "ALTER TABLE session_answers ADD COLUMN credit INTEGER NOT NULL DEFAULT 0",
+            # Backfill with the rule that was in force until now: only a fully
+            # correct answer earned anything, partial and incorrect earned 0.
+            # Past sessions therefore keep exactly the figures they had.
+            "UPDATE session_answers SET credit = 100 WHERE grade = 'correct'",
+        ],
+    ),
 ]
 
 
@@ -249,6 +264,7 @@ def record_grade(
     question_id: int,
     position: int,
     grade: str,
+    credit: int,
 ) -> None:
     """
     Store the grade the user gave themselves for one question.
@@ -263,17 +279,21 @@ def record_grade(
         question_id: Question that was shown.
         position: One-based place in the session's order.
         grade: One of the values in ``questionbank.api.GRADES``.
+        credit: Points the answer earns under the scoring rule in force right
+            now, in hundredths of a point. Stored so later rule changes do not
+            re-score this answer.
     """
     conn.execute(
         """
-        INSERT INTO session_answers (session_id, question_id, position, grade, answered_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO session_answers (session_id, question_id, position, grade, credit, answered_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(session_id, question_id) DO UPDATE SET
             position    = excluded.position,
             grade       = excluded.grade,
+            credit      = excluded.credit,
             answered_at = excluded.answered_at
         """,
-        (session_id, question_id, position, grade, _now()),
+        (session_id, question_id, position, grade, credit, _now()),
     )
     conn.commit()
 
@@ -281,7 +301,7 @@ def record_grade(
 def list_answers(conn: sqlite3.Connection, session_id: int) -> list[sqlite3.Row]:
     """Return one session's stored grades in the order they were shown."""
     return conn.execute(
-        "SELECT question_id, position, grade, answered_at FROM session_answers "
+        "SELECT question_id, position, grade, credit, answered_at FROM session_answers "
         "WHERE session_id = ? ORDER BY position",
         (session_id,),
     ).fetchall()
@@ -290,7 +310,7 @@ def list_answers(conn: sqlite3.Connection, session_id: int) -> list[sqlite3.Row]
 def list_all_answers(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Return every stored grade, for the overall statistics."""
     return conn.execute(
-        "SELECT session_id, question_id, grade FROM session_answers"
+        "SELECT session_id, question_id, grade, credit FROM session_answers"
     ).fetchall()
 
 

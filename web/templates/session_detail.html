@@ -21,7 +21,7 @@
     {% else %}
     <span class="badge badge-bad">Не сдано</span>
     {% endif %}
-    — {{ "%.1f"|format(tally.percent_correct) }}% правильных (порог 70%)
+    — {{ "%.1f"|format(tally.score_percent) }}% ({{ "%.2f"|format(tally.points) }} из {{ tally.total }}), порог {{ "%.0f"|format(PASS_THRESHOLD_PERCENT) }}%
   </p>
   <p class="muted">
     Зачтено {{ tally.total }} из {{ summary.session.planned_count }} ·

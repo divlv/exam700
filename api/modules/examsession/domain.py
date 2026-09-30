@@ -17,8 +17,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-#: Percentage of correct answers needed to pass the real exam.
+#: Score, as a percentage of the maximum, needed to pass the real exam.
 PASS_THRESHOLD_PERCENT = 70.0
+
+#: What an answer earns, in hundredths of a point. A fully correct answer is
+#: one point; a partially correct one earns 34 hundredths of it. The value is
+#: stored on each answer when it is graded (see ``session_answers.credit``), so
+#: changing it here only affects answers graded afterwards.
+FULL_CREDIT = 100
+PARTIAL_CREDIT_PERCENT = 34
 
 #: A session is running, was played to the end, or was abandoned part way.
 STATUS_IN_PROGRESS = "in_progress"
@@ -61,6 +68,8 @@ class AnswerRecord:
         counted: Whether the question is still available and therefore still
             contributes to the statistics. ``False`` once it is flagged as badly
             cropped or found to have no answer in the source.
+        credit: Points the answer earned when it was graded, in hundredths of a
+            point (100 = fully correct).
     """
 
     question_id: int
@@ -68,25 +77,36 @@ class AnswerRecord:
     grade: str
     answered_at: str
     counted: bool
+    credit: int
 
 
 @dataclass(frozen=True)
 class Tally:
     """
-    Counts of grades, with the derived percentages.
+    Counts of grades and the score they add up to.
 
     Only counted answers reach a tally, so a flagged question never shows up in
     one.
+
+    Two separate things are reported. ``percent_correct`` / ``percent_partial``
+    / ``percent_incorrect`` are the *share of answers* of each kind - a
+    breakdown. ``points`` / ``score_percent`` are the *score*, summed from the
+    credit each answer earned when it was graded; the pass verdict uses the
+    score.
 
     Attributes:
         correct: Answers graded correct.
         partial: Answers graded partially correct.
         incorrect: Answers graded incorrect.
+        credit: Sum of the credit of every counted answer, in hundredths of a
+            point. Kept as an integer so the score has no float drift and the
+            70% threshold compares exactly.
     """
 
     correct: int = 0
     partial: int = 0
     incorrect: int = 0
+    credit: int = 0
 
     @property
     def total(self) -> int:
@@ -94,29 +114,47 @@ class Tally:
         return self.correct + self.partial + self.incorrect
 
     @property
+    def points(self) -> float:
+        """Score in question-points; the maximum equals :attr:`total`."""
+        return self.credit / 100
+
+    @property
+    def score_percent(self) -> float:
+        """
+        Score as a percentage of the maximum, or 0.0 when nothing was counted.
+
+        ``credit`` is in hundredths of a point and one answer is worth 100, so
+        ``credit / total`` is already a percentage. Eight correct, one partial
+        and one incorrect answer out of ten give ``(800 + 34) / 10 = 83.4``.
+        """
+        return self.credit / self.total if self.total else 0.0
+
+    @property
     def percent_correct(self) -> float:
-        """Share of correct answers, or 0.0 when nothing was counted."""
+        """Share of answers graded correct (not the score), or 0.0 when empty."""
         return 100.0 * self.correct / self.total if self.total else 0.0
 
     @property
     def percent_partial(self) -> float:
-        """Share of partially correct answers."""
+        """Share of answers graded partially correct (not the score)."""
         return 100.0 * self.partial / self.total if self.total else 0.0
 
     @property
     def percent_incorrect(self) -> float:
-        """Share of incorrect answers."""
+        """Share of answers graded incorrect."""
         return 100.0 * self.incorrect / self.total if self.total else 0.0
 
     @property
     def passed(self) -> bool:
         """
-        Whether the result clears the exam threshold.
+        Whether the score clears the exam threshold.
 
         An empty tally never passes: with nothing counted there is no result to
-        judge, which the screens show as "no counted questions".
+        judge, which the screens show as "no counted questions". When the true
+        quotient is exactly 70 the integer division yields exactly 70.0, so the
+        boundary case is not lost to rounding.
         """
-        return self.total > 0 and self.percent_correct >= PASS_THRESHOLD_PERCENT
+        return self.total > 0 and self.score_percent >= PASS_THRESHOLD_PERCENT
 
 
 @dataclass(frozen=True)

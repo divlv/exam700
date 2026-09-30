@@ -347,9 +347,9 @@ def test_reset_all_sessions_keeps_the_catalog_and_the_flags(connection):
     assert questionbank.is_available(connection, flagged_id) is False
 
 
-def test_schema_v2_persists_session_plan(connection):
-    """The plan table is created by the same migration run as v1."""
-    assert examsession.ensure_schema(connection) == 2
+def test_schema_is_at_the_latest_version(connection):
+    """v2 added the session plan table, v3 the per-answer credit."""
+    assert examsession.ensure_schema(connection) == 3
 
 
 def test_get_active_session_tracks_the_running_session(connection):
@@ -452,3 +452,194 @@ def test_settings_round_trip_with_defaults(connection):
 
     assert examsession.get_default_question_count(connection) == 30
     assert examsession.get_auto_reveal(connection) is True
+
+
+# ---------------------------------------------------------------------------
+# Partial credit: a partially correct answer earns 0.34 of a point, for answers
+# graded from now on. Answers graded earlier keep the score they had.
+# ---------------------------------------------------------------------------
+
+
+def tally_of(correct: int, partial: int, incorrect: int) -> examsession.Tally:
+    """A tally scored by the current rule, as if every answer were graded now."""
+    return examsession.Tally(
+        correct=correct,
+        partial=partial,
+        incorrect=incorrect,
+        credit=100 * correct + examsession.PARTIAL_CREDIT_PERCENT * partial,
+    )
+
+
+def test_the_users_example_scores_eight_point_three_four_of_ten():
+    """8 correct + 1 partial + 1 incorrect of 10 is 8.34 points, 83.4%."""
+    tally = tally_of(8, 1, 1)
+
+    assert tally.total == 10
+    assert tally.points == pytest.approx(8.34)
+    assert tally.score_percent == pytest.approx(83.4)
+    assert tally.passed is True
+
+
+@pytest.mark.parametrize(
+    ("correct", "partial", "incorrect", "points", "percent"),
+    [
+        (2, 1, 0, 2.34, 78.0),  # 3 questions
+        (1, 1, 1, 1.34, 44.6667),
+        (3, 2, 0, 3.68, 73.6),  # 5 questions
+        (0, 5, 0, 1.70, 34.0),
+        (8, 1, 1, 8.34, 83.4),  # 10 questions
+        (5, 10, 5, 8.40, 42.0),  # 20 questions
+        (13, 2, 5, 13.68, 68.4),
+        (0, 20, 0, 6.80, 34.0),
+    ],
+)
+def test_score_scales_with_the_size_of_the_set(correct, partial, incorrect, points, percent):
+    """One question is worth 100/N percentage points, whatever N is."""
+    tally = tally_of(correct, partial, incorrect)
+
+    assert tally.points == pytest.approx(points)
+    assert tally.score_percent == pytest.approx(percent, abs=1e-3)
+
+
+def test_three_partial_answers_are_worth_slightly_more_than_one_correct():
+    """The rule is 0.34 exactly, so three partials make 1.02 points."""
+    assert tally_of(0, 3, 0).points == pytest.approx(1.02)
+    assert tally_of(1, 0, 2).points == pytest.approx(1.0)
+
+
+def test_the_pass_threshold_applies_to_the_score():
+    """Partials can tip a session over the line, and exactly 70% passes."""
+    assert tally_of(7, 0, 3).score_percent == 70.0
+    assert tally_of(7, 0, 3).passed is True
+    assert tally_of(6, 3, 1).score_percent == pytest.approx(70.2)
+    assert tally_of(6, 3, 1).passed is True
+    assert tally_of(6, 2, 2).score_percent == pytest.approx(66.8)
+    assert tally_of(6, 2, 2).passed is False
+
+
+def test_an_empty_tally_scores_nothing_and_does_not_pass():
+    tally = examsession.Tally()
+
+    assert tally.points == 0.0
+    assert tally.score_percent == 0.0
+    assert tally.passed is False
+
+
+def test_a_new_partial_answer_is_stored_with_its_credit(connection):
+    """The credit is fixed when the answer is graded, not derived later."""
+    runner = examsession.start_session(connection, 3, random.Random(30))
+    play(
+        runner,
+        [
+            examsession.GRADE_PARTIAL,
+            examsession.GRADE_CORRECT,
+            examsession.GRADE_INCORRECT,
+        ],
+    )
+
+    detail = examsession.get_session_detail(connection, runner.session.id)
+
+    assert [answer.credit for answer in detail.answers] == [34, 100, 0]
+    assert detail.summary.tally.points == pytest.approx(1.34)
+    assert detail.summary.tally.score_percent == pytest.approx(44.667, abs=1e-3)
+
+
+def test_a_session_of_ten_uses_the_partial_credit_for_its_verdict(connection):
+    """Six correct and three partial pass at 70.2%; without partial credit they would not."""
+    runner = examsession.start_session(connection, 10, random.Random(31))
+    play(
+        runner,
+        [examsession.GRADE_CORRECT] * 6
+        + [examsession.GRADE_PARTIAL] * 3
+        + [examsession.GRADE_INCORRECT],
+    )
+
+    summary = examsession.list_sessions(connection)[0]
+    assert summary.tally.score_percent == pytest.approx(70.2)
+    assert summary.tally.passed is True
+    assert examsession.get_overview(connection).passed_sessions == 1
+
+
+def test_a_session_graded_partly_under_the_old_rule_keeps_the_old_score(connection):
+    """
+    A session in flight when the rule changed is scored answer by answer.
+
+    The first answer is rewritten to credit 0, which is what the old rule gave
+    a partial answer; the second is graded now. Only the second earns 0.34.
+    """
+    runner = examsession.start_session(connection, 3, random.Random(32))
+    runner.grade(examsession.GRADE_PARTIAL)
+    connection.execute("UPDATE session_answers SET credit = 0 WHERE position = 1")
+    connection.commit()
+    runner.grade(examsession.GRADE_PARTIAL)
+    runner.grade(examsession.GRADE_CORRECT)
+    runner.finish()
+
+    tally = examsession.get_session_detail(connection, runner.session.id).summary.tally
+
+    assert tally.credit == 0 + 34 + 100
+    assert tally.points == pytest.approx(1.34)
+
+
+def test_a_database_from_before_partial_credit_is_not_rescored(tmp_path):
+    """
+    Migrating an existing database must leave past sessions exactly as they were.
+
+    The old rule gave only a fully correct answer any credit, so the backfill
+    gives correct 100 and everything else 0: a past session of 7 correct,
+    2 partial and 1 incorrect is still 70.0% and still a pass - not the 76.8%
+    the new rule would give it.
+    """
+    conn = get_connection(tmp_path / "old.sqlite")
+    questionbank.ensure_schema(conn)
+    for number in range(1, 11):
+        questionbank.upsert_question(conn, make_question(number))
+    # The examsession tables exactly as schema v2 left them: no credit column.
+    conn.executescript(
+        """
+        CREATE TABLE sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT NOT NULL,
+            finished_at TEXT, planned_count INTEGER NOT NULL, status TEXT NOT NULL
+        );
+        CREATE TABLE session_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL, position INTEGER NOT NULL,
+            grade TEXT NOT NULL, answered_at TEXT NOT NULL,
+            UNIQUE(session_id, question_id)
+        );
+        CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE session_questions (
+            session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+            position INTEGER NOT NULL, question_id INTEGER NOT NULL,
+            PRIMARY KEY (session_id, position)
+        );
+        INSERT INTO schema_version (component, version) VALUES ('examsession', 2);
+        INSERT INTO sessions (started_at, finished_at, planned_count, status)
+            VALUES ('2026-09-01T10:00:00+00:00', '2026-09-01T10:30:00+00:00', 10, 'completed');
+        """
+    )
+    grades = ["correct"] * 7 + ["partial"] * 2 + ["incorrect"]
+    for position, grade in enumerate(grades, start=1):
+        conn.execute(
+            "INSERT INTO session_answers (session_id, question_id, position, grade, answered_at) "
+            "VALUES (1, ?, ?, ?, '2026-09-01T10:10:00+00:00')",
+            (position, position, grade),
+        )
+    conn.commit()
+
+    assert examsession.ensure_schema(conn) == 3
+
+    tally = examsession.list_sessions(conn)[0].tally
+    assert tally.credit == 700
+    assert tally.points == 7.0
+    assert tally.score_percent == 70.0
+    assert tally.passed is True
+    assert (tally.correct, tally.partial, tally.incorrect) == (7, 2, 1)
+
+    # A session graded after the migration uses the new rule.
+    runner = examsession.start_session(conn, 1, random.Random(33))
+    runner.grade(examsession.GRADE_PARTIAL)
+    newest = examsession.list_sessions(conn)[0].tally
+    assert newest.credit == 34
+    conn.close()

@@ -63,7 +63,21 @@ _Avoid_: "valid answer", "active answer".
 Counts of correct/partial/incorrect among a session's (or the whole history's)
 counted answers, with the derived pass/fail verdict.
 
+**Credit**:
+The points one answer earned at the moment it was graded, stored with the
+answer: `correct` = 1, `partial` = 0.34, `incorrect` = 0. Stored, not derived
+from the grade, so changing the rule only affects answers graded afterwards.
+Answers graded before partial credit existed keep 0 for `partial`.
+_Avoid_: recomputing a score from the grade.
+
+**Score**:
+The sum of credit over a tally's counted answers, shown as points out of the
+number of counted answers and as a percentage of that maximum. Eight correct,
+one partial and one incorrect of ten is 8.34 points, 83.4%. One question in a
+set of N is worth 100/N percentage points. Russian UI: *балл*, *оценка*.
+_Avoid_: using "percent correct" for the score - that is the separate share of
+answers graded correct.
+
 **Pass threshold**:
-70% correct among counted answers. Only `correct` counts toward the
-percentage; `partial` inflates the denominator but earns no credit. An empty
-tally (nothing counted) never passes. Russian UI: *порог сдачи*.
+A score of at least 70%. An empty tally (nothing counted) never passes.
+Russian UI: *порог сдачи*.

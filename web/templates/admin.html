@@ -27,7 +27,7 @@
         <td data-label="Учтено">{{ s.tally.total }} из {{ s.session.planned_count }}</td>
         <td data-label="Итог">
           {% if s.tally.total == 0 %}<span class="muted">нет зачтённых</span>
-          {% else %}{{ s.tally.correct }} ({{ "%.0f"|format(s.tally.percent_correct) }}%){% endif %}
+          {% else %}{{ "%.2f"|format(s.tally.points) }} ({{ "%.1f"|format(s.tally.score_percent) }}%){% endif %}
         </td>
         <td data-label="Статус">
           {% if s.session.status == "completed" %}завершена

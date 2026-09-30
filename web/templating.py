@@ -14,5 +14,12 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from api.modules.examsession import api as examsession
+
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Scoring constants shown in the screens' explanatory text, so the wording can
+# never drift from the values the backend actually applies.
+templates.env.globals["PASS_THRESHOLD_PERCENT"] = examsession.PASS_THRESHOLD_PERCENT
+templates.env.globals["PARTIAL_CREDIT"] = examsession.PARTIAL_CREDIT_PERCENT / 100

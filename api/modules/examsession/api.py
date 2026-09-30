@@ -20,6 +20,7 @@ Example:
 from __future__ import annotations
 
 from api.modules.examsession.domain import (
+    PARTIAL_CREDIT_PERCENT,
     PASS_THRESHOLD_PERCENT,
     STATUS_ABANDONED,
     STATUS_COMPLETED,
@@ -66,6 +67,7 @@ __all__ = [
     "GRADE_INCORRECT",
     "NoQuestionsAvailable",
     "Overview",
+    "PARTIAL_CREDIT_PERCENT",
     "PASS_THRESHOLD_PERCENT",
     "STATUS_ABANDONED",
     "STATUS_COMPLETED",

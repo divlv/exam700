@@ -41,6 +41,9 @@ def test_full_session_can_be_played_to_the_end(logged_in_client):
     assert "/results/" in str(finished.url)
     assert "Зачтено 3 из 3" in finished.text
     assert "правильно 1" in finished.text
+    # One correct (1.00) + one partial (0.34) + one incorrect (0) of three.
+    assert "1.34 из 3" in finished.text
+    assert "44.7%" in finished.text
 
 
 def test_resuming_after_a_fresh_request_continues_where_it_left_off(logged_in_client):
