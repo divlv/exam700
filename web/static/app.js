@@ -209,7 +209,8 @@
       const next = showingAnswer ? "question" : "answer";
       viewer.dataset.showing = next;
       img.src = next === "answer" ? viewer.dataset.answerSrc : viewer.dataset.questionSrc;
-      if (label) label.textContent = next === "answer" ? "Ответ" : "Вопрос (перечитать)";
+      // The label names what the next click will show, not what is shown now.
+      if (label) label.textContent = next === "question" ? "Ответ" : "Вопрос (перечитать)";
       img.addEventListener("load", () => viewer._reFit && viewer._reFit(), { once: true });
     });
   }

@@ -20,6 +20,7 @@
   --bad: #b3261e;
   --bad-bg: #fbe9e7;
   --warn: #8a6100;
+  --on-warn: #ffffff; /* text on a solid --warn background */
   --warn-bg: #fdf3d9;
   --radius: 10px;
   --gap: 12px;
@@ -40,6 +41,7 @@
     --bad: #f28b83;
     --bad-bg: #3a1f1c;
     --warn: #e0bd4e;
+    --on-warn: #1f2420;
     --warn-bg: #3a3018;
   }
 }
@@ -149,7 +151,7 @@ p { margin: 0 0 var(--gap); }
 
 .btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .btn-good { background: var(--good); border-color: var(--good); color: #fff; }
-.btn-warn { background: var(--warn); border-color: var(--warn); color: #1f2420; }
+.btn-warn { background: var(--warn); border-color: var(--warn); color: var(--on-warn); }
 
 .btn-block { display: flex; width: 100%; }
 .btn-link {
@@ -313,7 +315,12 @@ table.responsive tbody tr:hover { background: var(--bg); }
 }
 
 .grade-buttons { display: flex; gap: 8px; }
-.grade-buttons .btn { flex: 1; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+/* min-width: 0 and small side padding let the three buttons share the row on a
+   phone; with the default 18px padding the word "Неправильно" pushed the third
+   button past the right edge at 390px and made the whole page scroll sideways. */
+.grade-buttons .btn { flex: 1 1 0; min-width: 0; padding: 10px 4px; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+@media (max-width: 400px) { .grade-buttons .btn { font-size: 0.82rem; } }
+@media (max-width: 340px) { .grade-buttons .btn { font-size: 0.74rem; } }
 .grade-buttons .btn small { font-weight: 400; opacity: 0.85; }
 
 .secondary-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; }
