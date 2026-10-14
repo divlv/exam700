@@ -32,6 +32,7 @@ from api.modules.shared import api as shared
 from web import auth
 from web.deps import NotAuthenticated
 from web.routes import admin, exam, health, images, menu, results, session, settings
+from web.version import get_git_commit
 
 logger = shared.get_logger(__name__)
 
@@ -86,8 +87,9 @@ async def _lifespan(app: FastAPI):
         conn.close()
 
     logger.info(
-        "startup: run_id=%s data_dir=%s db_path=%s schema questionbank=v%d examsession=v%d",
+        "startup: run_id=%s commit=%s data_dir=%s db_path=%s schema questionbank=v%d examsession=v%d",
         shared.get_run_id(),
+        get_git_commit(),
         shared.DATA_DIR,
         shared.DB_PATH,
         questionbank_version,

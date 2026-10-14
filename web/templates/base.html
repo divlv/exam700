@@ -19,9 +19,10 @@
     </form>
     {% endif %}
   </header>
-  <main class="page">
+  <main class="page{% block page_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  <footer class="page-footer">{{ GIT_COMMIT }}</footer>
   <script src="/static/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>

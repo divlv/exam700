@@ -44,6 +44,9 @@ SETTING_AUTO_REVEAL = "auto_reveal_answer"
 DEFAULT_QUESTION_COUNT = 20
 DEFAULT_AUTO_REVEAL = False
 
+#: How many random questions compete each time the next one is chosen.
+SELECTION_WINDOW = 10
+
 
 class NoQuestionsAvailable(RuntimeError):
     """Raised when a session cannot be started because the pool is too small."""
@@ -62,6 +65,46 @@ def _credit_for(grade: str) -> int:
     if grade == questionbank.GRADE_PARTIAL:
         return PARTIAL_CREDIT_PERCENT
     return 0
+
+
+def _choose_next(
+    conn: sqlite3.Connection, exclude: set[int], rng: random.Random | None
+) -> questionbank.Question | None:
+    """
+    Pick the next question to show, steering towards what needs practice.
+
+    A random window of :data:`SELECTION_WINDOW` available questions competes.
+    Any question in it that was never answered wins, picked at random among
+    those; if every one has been answered, the one with the most incorrect
+    answers wins, ties again broken at random. Correct and partial answers are
+    deliberately not told apart.
+
+    Args:
+        conn: Open connection.
+        exclude: Questions that must not be chosen, normally the ones this
+            session has already drawn.
+        rng: Random source, for reproducible tests.
+
+    Returns:
+        The chosen question, or ``None`` when no available question is left
+        outside ``exclude``.
+    """
+    source = rng or random
+    candidates = [
+        qid for qid in questionbank.available_question_ids(conn) if qid not in exclude
+    ]
+    if not candidates:
+        return None
+
+    window = source.sample(candidates, min(SELECTION_WINDOW, len(candidates)))
+    history = repo.answer_history(conn, window)
+
+    contenders = [qid for qid in window if history[qid].attempts == 0]
+    if not contenders:
+        worst = max(history[qid].incorrect for qid in window)
+        contenders = [qid for qid in window if history[qid].incorrect == worst]
+
+    return questionbank.get_question(conn, source.choice(contenders))
 
 
 def ensure_schema(conn: sqlite3.Connection) -> int:
@@ -265,11 +308,8 @@ class SessionRunner:
         self._conn.commit()
         self._flagged += 1
 
-        try:
-            replacement = questionbank.sample_questions(
-                self._conn, 1, self._rng, exclude=self._seen
-            )[0]
-        except ValueError:
+        replacement = _choose_next(self._conn, self._seen, self._rng)
+        if replacement is None:
             # Nothing left to swap in. Drop the flagged question from the plan so
             # the session ends cleanly instead of showing it again.
             self._questions.pop(self._index)
@@ -321,6 +361,12 @@ def start_session(
     """
     Draw questions and open a session for them.
 
+    The questions are chosen one at a time by :func:`_choose_next`, so the user's
+    history of answers steers the plan towards unanswered and badly answered
+    questions. Choosing them all up front is equivalent to choosing as the
+    session goes: a question appears once per session, so nothing answered
+    during the session can change the history of a question still to come.
+
     Args:
         conn: Open connection.
         size: How many questions to ask.
@@ -334,10 +380,22 @@ def start_session(
             Questions with no answer in the source and questions flagged as
             badly cropped are not part of the pool.
     """
-    try:
-        questions = questionbank.sample_questions(conn, size, rng)
-    except ValueError as error:
-        raise NoQuestionsAvailable(str(error)) from error
+    if size < 1:
+        raise NoQuestionsAvailable("Session size must be at least 1")
+    available = questionbank.count_available(conn)
+    if size > available:
+        raise NoQuestionsAvailable(
+            f"Requested {size} questions but only {available} are available"
+        )
+
+    questions: list[questionbank.Question] = []
+    chosen: set[int] = set()
+    for _ in range(size):
+        question = _choose_next(conn, chosen, rng)
+        if question is None:  # cannot happen: the pool was checked above
+            raise NoQuestionsAvailable("The question pool ran out while drawing")
+        questions.append(question)
+        chosen.add(question.id)
 
     session = repo.create_session(conn, size)
     repo.insert_plan(conn, session.id, [q.id for q in questions])

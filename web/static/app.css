@@ -278,6 +278,10 @@ table.responsive tbody tr:hover { background: var(--bg); }
 
 .image-viewer-scroll {
   overflow: auto;
+  /* Reserve room for the vertical scrollbar up front, so the viewer's width
+     does not shrink once a tall image makes the scrollbar appear (which is
+     what used to push the fitted image into a horizontal scrollbar). */
+  scrollbar-gutter: stable;
   max-height: 70vh;
   background: #fff;
   text-align: center;
@@ -337,10 +341,22 @@ details.answer-row .answer-row-body img { width: 100%; height: auto; border: 1px
 .badge-bad { background: var(--bad-bg); color: var(--bad); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
 
+/* Build identifier (short git commit) at the foot of every page. */
+.page-footer {
+  text-align: center;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  padding: 4px 16px calc(14px + env(safe-area-inset-bottom));
+}
+
 /* ------------------------------------------------------------- desktop */
 
 @media (min-width: 769px) {
   .page { padding-top: 24px; }
+  /* The exam screen is not kept phone-narrow: question images are 1355px wide,
+     and the 720px column shrank them to about half size. */
+  .page-exam { max-width: 1440px; }
   .menu-list { max-width: 420px; }
   .action-bar { margin: 0; border-radius: 0 0 var(--radius) var(--radius); }
 }

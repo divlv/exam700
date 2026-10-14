@@ -37,9 +37,19 @@
 
     function fitToWidth() {
       if (!img.naturalWidth) return;
-      scale = clamp((scroll.clientWidth - 4) / img.naturalWidth);
       fitted = true;
+      // Never enlarge past 1:1: on a wide screen the image is shown at its
+      // native size and centred, instead of being stretched and blurred.
+      const fitScale = () => clamp(Math.min(1, (scroll.clientWidth - 4) / img.naturalWidth));
+      scale = fitScale();
       apply();
+      // A tall image makes a vertical scrollbar appear, which takes width from
+      // the viewer on desktop (phones overlay it). If that left the image wider
+      // than the viewer, fit once more against the width that is really left.
+      if (scroll.scrollWidth > scroll.clientWidth) {
+        scale = fitScale();
+        apply();
+      }
     }
 
     function actualSize() {

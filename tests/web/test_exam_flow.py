@@ -12,6 +12,7 @@ def test_menu_shows_the_catalog_state(logged_in_client):
     response = logged_in_client.get("/")
     assert response.status_code == 200
     assert "Доступно вопросов: 3 из 3" in response.text
+    assert "page-exam" not in response.text, "only the exam screen gets the wide layout"
 
 
 def test_new_session_offers_the_whole_pool_when_below_every_preset(logged_in_client):
@@ -24,6 +25,7 @@ def test_full_session_can_be_played_to_the_end(logged_in_client):
     start = logged_in_client.post("/session/new", data={"count": "3"})
     assert start.status_code == 200
     assert "Вопрос 1 из 3" in start.text
+    assert 'class="page page-exam"' in start.text
     assert 'data-action="copy-image"' in start.text
 
     answer = logged_in_client.get("/exam/answer")

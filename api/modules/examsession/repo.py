@@ -16,6 +16,7 @@ from api.modules.examsession.domain import (
     STATUS_COMPLETED,
     STATUS_IN_PROGRESS,
     ExamSession,
+    QuestionHistory,
 )
 from api.modules.shared.api import apply_migrations
 
@@ -305,6 +306,45 @@ def list_answers(conn: sqlite3.Connection, session_id: int) -> list[sqlite3.Row]
         "WHERE session_id = ? ORDER BY position",
         (session_id,),
     ).fetchall()
+
+
+def answer_history(
+    conn: sqlite3.Connection, question_ids: list[int]
+) -> dict[int, QuestionHistory]:
+    """
+    Count how each of the given questions has been graded so far.
+
+    Args:
+        conn: Open connection.
+        question_ids: Questions to look up. Meant for a handful of ids - the
+            selection window - since one placeholder is bound per id.
+
+    Returns:
+        A history for every id asked about; a question that was never answered
+        gets an empty :class:`QuestionHistory` rather than being left out.
+    """
+    if not question_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in question_ids)
+    rows = conn.execute(
+        f"SELECT question_id, grade, COUNT(*) AS n FROM session_answers "
+        f"WHERE question_id IN ({placeholders}) GROUP BY question_id, grade",
+        question_ids,
+    ).fetchall()
+
+    counts: dict[int, dict[str, int]] = {qid: {} for qid in question_ids}
+    for row in rows:
+        counts[row["question_id"]][row["grade"]] = row["n"]
+
+    return {
+        qid: QuestionHistory(
+            correct=grades.get("correct", 0),
+            partial=grades.get("partial", 0),
+            incorrect=grades.get("incorrect", 0),
+        )
+        for qid, grades in counts.items()
+    }
 
 
 def list_all_answers(conn: sqlite3.Connection) -> list[sqlite3.Row]:

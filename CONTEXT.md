@@ -46,6 +46,21 @@ a phone dropping its tab, or a pod restart - see
 _Avoid_: "runner state" (that is the in-memory `SessionRunner` rebuilt fresh
 from the plan on every request - an implementation detail, not a domain term).
 
+**Question history**:
+How many times the user has graded one question correct, partial and incorrect,
+across every session including abandoned ones. It is read straight from the
+stored answers, so resetting the statistics empties it. A question with no
+answers at all is *unanswered* in this sense (not to be confused with the
+*unanswered question* above, which the source never answered).
+Russian UI: *журнал ответов*.
+
+**Selection window**:
+The ten random available questions that compete each time the next question is
+chosen. A never-answered question in the window wins (random among those);
+otherwise the one with the most incorrect answers wins; every tie is broken at
+random. Correct and partial answers are not told apart. Fewer than ten compete
+when fewer are left.
+
 **Grade**:
 The user's own self-assessment of one answer: `correct`, `partial`, or
 `incorrect`. There is no automatic grading - the user reads the answer image

@@ -81,6 +81,31 @@ class AnswerRecord:
 
 
 @dataclass(frozen=True)
+class QuestionHistory:
+    """
+    How the user has answered one question across every session so far.
+
+    Built from the stored answers, so it covers abandoned sessions too, and a
+    reset of the statistics empties it. It is what the question selection reads
+    to decide which question to show next.
+
+    Attributes:
+        correct: Times the question was graded correct.
+        partial: Times it was graded partially correct.
+        incorrect: Times it was graded incorrect.
+    """
+
+    correct: int = 0
+    partial: int = 0
+    incorrect: int = 0
+
+    @property
+    def attempts(self) -> int:
+        """How many times the question has been answered; 0 means never."""
+        return self.correct + self.partial + self.incorrect
+
+
+@dataclass(frozen=True)
 class Tally:
     """
     Counts of grades and the score they add up to.

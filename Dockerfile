@@ -29,6 +29,12 @@ COPY api ./api
 COPY web ./web
 RUN rm -rf ./api/modules/ingest
 
+# The commit this image was built from, shown in every page footer. The image
+# has no .git directory, so the CI workflow passes it in. Declared after the
+# code is copied so a new commit only invalidates the layers from here on.
+ARG GIT_COMMIT=unknown
+ENV AZ700_GIT_COMMIT=${GIT_COMMIT}
+
 USER appuser
 
 # AZ700_LOGS_DIR must be writable: the k8s Deployment runs this image with
