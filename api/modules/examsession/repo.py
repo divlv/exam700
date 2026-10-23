@@ -96,6 +96,16 @@ _MIGRATIONS: list[tuple[int, list[str]]] = [
             "UPDATE session_answers SET credit = 100 WHERE grade = 'correct'",
         ],
     ),
+    (
+        4,
+        [
+            # "Come back to this one": the user postponed the question without
+            # grading it. The mark belongs to the plan row, so it survives a
+            # page reload or a pod restart, and travels with the row when a
+            # position is removed. Existing sessions have no marks.
+            "ALTER TABLE session_questions ADD COLUMN marked INTEGER NOT NULL DEFAULT 0",
+        ],
+    ),
 ]
 
 
@@ -210,12 +220,45 @@ def list_plan(conn: sqlite3.Connection, session_id: int) -> list[int]:
     return [row["question_id"] for row in rows]
 
 
+def list_plan_entries(
+    conn: sqlite3.Connection, session_id: int
+) -> list[tuple[int, int, bool]]:
+    """
+    Return one session's plan as ``(position, question_id, marked)``, in order.
+
+    ``marked`` is whether the user postponed that question to come back to it.
+    """
+    rows = conn.execute(
+        "SELECT position, question_id, marked FROM session_questions "
+        "WHERE session_id = ? ORDER BY position",
+        (session_id,),
+    ).fetchall()
+    return [(row["position"], row["question_id"], bool(row["marked"])) for row in rows]
+
+
+def set_marked(
+    conn: sqlite3.Connection, session_id: int, position: int, marked: bool
+) -> None:
+    """Set or clear the "come back to this" mark on one plan position."""
+    conn.execute(
+        "UPDATE session_questions SET marked = ? WHERE session_id = ? AND position = ?",
+        (1 if marked else 0, session_id, position),
+    )
+    conn.commit()
+
+
 def replace_plan_question(
     conn: sqlite3.Connection, session_id: int, position: int, question_id: int
 ) -> None:
-    """Swap the question stored at one position, keeping every other position."""
+    """
+    Swap the question stored at one position, keeping every other position.
+
+    The mark is cleared: the replacement is a different question that the user
+    has not postponed.
+    """
     conn.execute(
-        "UPDATE session_questions SET question_id = ? WHERE session_id = ? AND position = ?",
+        "UPDATE session_questions SET question_id = ?, marked = 0 "
+        "WHERE session_id = ? AND position = ?",
         (question_id, session_id, position),
     )
     conn.commit()

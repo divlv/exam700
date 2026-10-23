@@ -348,8 +348,8 @@ def test_reset_all_sessions_keeps_the_catalog_and_the_flags(connection):
 
 
 def test_schema_is_at_the_latest_version(connection):
-    """v2 added the session plan table, v3 the per-answer credit."""
-    assert examsession.ensure_schema(connection) == 3
+    """v2 added the session plan table, v3 the per-answer credit, v4 the postpone mark."""
+    assert examsession.ensure_schema(connection) == 4
 
 
 def test_get_active_session_tracks_the_running_session(connection):
@@ -628,7 +628,7 @@ def test_a_database_from_before_partial_credit_is_not_rescored(tmp_path):
         )
     conn.commit()
 
-    assert examsession.ensure_schema(conn) == 3
+    assert examsession.ensure_schema(conn) == 4
 
     tally = examsession.list_sessions(conn)[0].tally
     assert tally.credit == 700

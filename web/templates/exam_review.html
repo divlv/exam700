@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Обзор вопросов — AZ-700{% endblock %}
+{% block content %}
+<div class="row row-wrap">
+  <h1>Обзор вопросов</h1>
+</div>
+
+<div class="section">
+  <p>
+    Оценено {{ graded }} из {{ runner.total }}
+    {% if marked_count %} · отмечено 🚩 {{ marked_count }}{% endif %}
+    {% if pending_count %} · ещё не показано {{ pending_count }}{% endif %}
+  </p>
+  {% if unresolved %}
+  <p class="muted">Вопросы без оценки (отмеченные и не показанные) при завершении теста будут засчитаны как неправильные.</p>
+  {% endif %}
+</div>
+
+<div class="section">
+  <table class="responsive">
+    <thead>
+      <tr><th>№ в тесте</th><th>Вопрос</th><th>Статус</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr>
+        <td data-label="№ в тесте">{{ entry.position }}</td>
+        <td data-label="Вопрос">№{{ entry.question_id }}</td>
+        <td data-label="Статус">
+          {% if entry.state == "marked" %}
+          <span class="badge badge-warn">🚩 отмечен</span>
+          {% elif entry.state == "graded" %}
+          {% if entry.grade == "correct" %}<span class="badge badge-good">правильно</span>
+          {% elif entry.grade == "partial" %}<span class="badge badge-warn">частично</span>
+          {% else %}<span class="badge badge-bad">неправильно</span>{% endif %}
+          {% else %}
+          <span class="muted">без оценки</span>
+          {% endif %}
+        </td>
+        <td data-label="">
+          <a href="/exam/q/{{ entry.position }}" class="btn btn-sm">
+            {% if entry.state == "graded" %}Открыть{% else %}Ответить{% endif %}
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="btn-group">
+  {% if first_marked %}
+  <a href="/exam/q/{{ first_marked }}" class="btn btn-primary">К отмеченным</a>
+  {% endif %}
+  {% if pending_count %}
+  <a href="/exam" class="btn {{ '' if first_marked else 'btn-primary' }}">Продолжить</a>
+  {% endif %}
+  <form method="post" action="/exam/finish"
+        data-confirm="{% if unresolved %}Завершить тест? Вопросов без оценки: {{ unresolved }} — они будут засчитаны как неправильные.{% else %}Завершить тест?{% endif %}">
+    <button type="submit" class="btn btn-block {{ 'btn-danger' if unresolved else 'btn-primary' }}">Завершить тест</button>
+  </form>
+</div>
+{% endblock %}

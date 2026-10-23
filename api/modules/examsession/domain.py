@@ -80,6 +80,31 @@ class AnswerRecord:
     credit: int
 
 
+#: Where one question of a running session stands: not looked at yet, postponed
+#: with the "come back to this" mark, or given a grade.
+ENTRY_PENDING = "pending"
+ENTRY_MARKED = "marked"
+ENTRY_GRADED = "graded"
+
+
+@dataclass(frozen=True)
+class PlanEntry:
+    """
+    One question of a running session, as the review screen lists it.
+
+    Attributes:
+        position: One-based place in the session's plan.
+        question_id: Question number shown to the user.
+        state: :data:`ENTRY_PENDING`, :data:`ENTRY_MARKED` or :data:`ENTRY_GRADED`.
+        grade: The grade given, or ``None`` unless the entry is graded.
+    """
+
+    position: int
+    question_id: int
+    state: str
+    grade: str | None = None
+
+
 @dataclass(frozen=True)
 class QuestionHistory:
     """

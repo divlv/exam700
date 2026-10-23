@@ -1,15 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Вопрос {{ runner.position }} из {{ runner.total }} — AZ-700{% endblock %}
+{% block title %}Вопрос {{ position }} из {{ runner.total }} — AZ-700{% endblock %}
 {% block page_class %} page-exam{% endblock %}
 {% block content %}
 <div class="exam-header row row-wrap">
   <div>
-    <h1>Вопрос {{ runner.position }} из {{ runner.total }}</h1>
-    <div class="exam-meta">№{{ question.id }} в наборе</div>
+    <h1>Вопрос {{ position }} из {{ runner.total }}</h1>
+    <div class="exam-meta">
+      №{{ question.id }} в наборе
+      {% if entry.state == "marked" %}
+      · <span class="badge badge-warn">🚩 отмечен</span>
+      {% elif entry.state == "graded" %}
+      · <span class="badge {{ 'badge-good' if entry.grade == 'correct' else ('badge-warn' if entry.grade == 'partial' else 'badge-bad') }}">уже оценён: {{ {'correct': 'правильно', 'partial': 'частично', 'incorrect': 'неправильно'}[entry.grade] }}</span>
+      {% endif %}
+    </div>
   </div>
   <form method="post" action="/exam/flag"
         data-confirm="Пометить этот вопрос как некорректно вырезанный? Он будет исключён из всех будущих сессий."
         class="exam-flag-form">
+    <input type="hidden" name="position" value="{{ position }}">
     <button type="submit" class="btn">Вопрос некорректный</button>
   </form>
 </div>
@@ -39,18 +47,21 @@
 
 <div class="action-bar">
   {% if not revealed %}
-  <a href="/exam/answer" class="btn btn-primary btn-block" id="reveal-btn">Показать ответ <span style="opacity:.8">(Пробел)</span></a>
+  <a href="{{ answer_url }}" class="btn btn-primary btn-block" id="reveal-btn">Показать ответ <span style="opacity:.8">(Пробел)</span></a>
   {% else %}
   <div class="grade-buttons">
     <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="position" value="{{ position }}">
       <input type="hidden" name="grade" value="correct">
       <button type="submit" class="btn btn-good" id="grade-correct">Правильно<small>1</small></button>
     </form>
     <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="position" value="{{ position }}">
       <input type="hidden" name="grade" value="partial">
       <button type="submit" class="btn btn-warn" id="grade-partial">Частично<small>2</small></button>
     </form>
     <form method="post" action="/exam/grade" style="display:contents">
+      <input type="hidden" name="position" value="{{ position }}">
       <input type="hidden" name="grade" value="incorrect">
       <button type="submit" class="btn btn-danger" id="grade-incorrect">Неправильно<small>3</small></button>
     </form>
@@ -61,6 +72,20 @@
           data-confirm="Прервать сессию? Уже выставленные оценки сохранятся.">
       <button type="submit" class="btn-link" id="abandon-btn">Прервать (Esc)</button>
     </form>
+    <div class="secondary-actions-right">
+      <a href="/exam/review" class="btn btn-sm">Обзор</a>
+      {% if entry.state == "marked" %}
+      <form method="post" action="/exam/unmark">
+        <input type="hidden" name="position" value="{{ position }}">
+        <button type="submit" class="btn btn-sm" id="mark-btn">Снять отметку</button>
+      </form>
+      {% elif entry.state != "graded" %}
+      <form method="post" action="/exam/mark">
+        <input type="hidden" name="position" value="{{ position }}">
+        <button type="submit" class="btn btn-sm" id="mark-btn" title="Отложить без оценки и вернуться позже. Если не вернуться до конца теста, вопрос будет засчитан как неправильный">🚩 Отметить на потом (M)</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 </div>
 

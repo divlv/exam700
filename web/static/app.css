@@ -323,7 +323,12 @@ table.responsive tbody tr:hover { background: var(--bg); }
 @media (max-width: 340px) { .grade-buttons .btn { font-size: 0.74rem; } }
 .grade-buttons .btn small { font-weight: 400; opacity: 0.85; }
 
-.secondary-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; }
+.secondary-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+.secondary-actions-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.secondary-actions-right form { margin: 0; }
+
+/* Compact button for secondary actions: still a comfortable tap target. */
+.btn-sm { min-height: 40px; padding: 6px 12px; font-size: 0.9rem; }
 
 /* ------------------------------------------------------------- details */
 

@@ -249,6 +249,10 @@
       } else if (event.key === "Escape") {
         const abandon = byId("abandon-btn");
         if (abandon) abandon.click();
+      } else if (event.code === "KeyM" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        // event.code, not event.key, so it works on the Russian layout too.
+        const mark = byId("mark-btn");
+        if (mark) mark.click();
       } else if (event.key === "F2") {
         const toggle = byId("toggle-view-btn");
         if (toggle) {

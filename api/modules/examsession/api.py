@@ -20,6 +20,9 @@ Example:
 from __future__ import annotations
 
 from api.modules.examsession.domain import (
+    ENTRY_GRADED,
+    ENTRY_MARKED,
+    ENTRY_PENDING,
     PARTIAL_CREDIT_PERCENT,
     PASS_THRESHOLD_PERCENT,
     STATUS_ABANDONED,
@@ -28,6 +31,7 @@ from api.modules.examsession.domain import (
     AnswerRecord,
     ExamSession,
     Overview,
+    PlanEntry,
     SessionDetail,
     SessionSummary,
     Tally,
@@ -60,6 +64,9 @@ from api.modules.questionbank.api import (
 __all__ = [
     "AnswerRecord",
     "DEFAULT_QUESTION_COUNT",
+    "ENTRY_GRADED",
+    "ENTRY_MARKED",
+    "ENTRY_PENDING",
     "ExamSession",
     "GRADES",
     "GRADE_CORRECT",
@@ -68,6 +75,7 @@ __all__ = [
     "NoQuestionsAvailable",
     "Overview",
     "PARTIAL_CREDIT_PERCENT",
+    "PlanEntry",
     "PASS_THRESHOLD_PERCENT",
     "STATUS_ABANDONED",
     "STATUS_COMPLETED",

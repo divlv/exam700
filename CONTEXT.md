@@ -46,6 +46,32 @@ a phone dropping its tab, or a pod restart - see
 _Avoid_: "runner state" (that is the in-memory `SessionRunner` rebuilt fresh
 from the plan on every request - an implementation detail, not a domain term).
 
+**Mark** (postpone):
+The user's "come back to this" flag on a question of a running session. A
+marked question has no grade, so it is not counted for now (but becomes a
+*skipped question*, counted as incorrect, if never returned to); the normal pass
+skips it and the review screen offers it again. Grading it clears the mark. Only
+a question without a grade can be marked. Stored on the session plan, so it
+survives a reload. Not to be confused with the *badly-cropped flag*, which
+removes a question from the pool for good. Russian UI: *отметить на потом* (🚩).
+_Avoid_: "flag" for this (that word is taken by the badly-cropped flag).
+
+**Review screen**:
+The list of every question of a session with its state - not yet shown,
+marked, or graded with its grade - from which any question can be reopened and
+graded or re-graded (a new grade replaces the old one). Opens by itself when the
+normal pass ends with marked questions left; if everything is graded the test
+simply finishes. Finishing from it with ungraded questions is allowed: they
+count as incorrect (see *Skipped question*). Russian UI: *обзор*.
+
+**Skipped question**:
+A question of a session that still has no grade when the test is finished -
+postponed with the mark, or never shown. As in an exam it counts as incorrect:
+it is stored as an ordinary incorrect answer worth 0 points and enters the
+answer history like one. Abandoning the session is different: the user is
+leaving, and only the grades actually given are kept. Russian UI: *пропущенный
+вопрос*.
+
 **Question history**:
 How many times the user has graded one question correct, partial and incorrect,
 across every session including abandoned ones. It is read straight from the
