@@ -172,7 +172,7 @@ p { margin: 0 0 var(--gap); }
 
 label { display: block; font-weight: 600; margin-bottom: 6px; }
 
-input[type="text"], input[type="number"], select {
+input[type="text"], input[type="password"], input[type="number"], select {
   width: 100%;
   min-height: var(--touch);
   padding: 8px 12px;

@@ -1,13 +1,18 @@
 """
 The one place that talks to Azure OpenAI.
 
-Settings come from three environment variables, so the deployment name and the
-key live in the cluster's Secret and never in this public repository:
+Settings come from environment variables, so the deployment name and the key
+live in the cluster's Secrets and never in this public repository:
 
 ``AZURE_OPENAI_ENDPOINT``
     ``https://<resource>.openai.azure.com/openai/v1``
+``AZURE_OPENAI_API_KEY_ENCRYPTED`` and ``AZURE_OPENAI_API_KEY_DECRYPTION_KEY``
+    The resource key as a Fernet token, and the key that opens it. They are kept
+    in different Secrets (see ``_secret``) and the key is decrypted when the
+    application starts. This is the form used in the cluster.
 ``AZURE_OPENAI_API_KEY``
-    The resource key.
+    The resource key in plain text. Only for local development; ignored when the
+    encrypted form is present.
 ``AZURE_OPENAI_DEPLOYMENT``
     Name of the model deployment (it is what the Responses API calls ``model``).
     There is no default on purpose.
@@ -34,14 +39,20 @@ from urllib.parse import urlsplit
 from openai import OpenAI
 
 from api.modules.aiassist.domain import AiNotConfigured
-from api.modules.aiassist.internal import _prompt
+from api.modules.aiassist.internal import _prompt, _secret
 from api.modules.shared.api import get_logger
 
 logger = get_logger(__name__)
 
 ENV_ENDPOINT = "AZURE_OPENAI_ENDPOINT"
 ENV_API_KEY = "AZURE_OPENAI_API_KEY"
+ENV_API_KEY_ENCRYPTED = "AZURE_OPENAI_API_KEY_ENCRYPTED"
+ENV_DECRYPTION_KEY = "AZURE_OPENAI_API_KEY_DECRYPTION_KEY"
 ENV_DEPLOYMENT = "AZURE_OPENAI_DEPLOYMENT"
+
+#: Where the key in use came from, for the startup log.
+KEY_SOURCE_ENCRYPTED = "encrypted"
+KEY_SOURCE_PLAIN = "plain"
 
 #: A request with high reasoning effort can think for minutes.
 REQUEST_TIMEOUT_SECONDS = 600.0
@@ -63,9 +74,13 @@ class AzureConfig:
     base_url: str
     api_key: str
     deployment: str
+    key_source: str = KEY_SOURCE_PLAIN
 
     def __repr__(self) -> str:
-        return f"AzureConfig(base_url={self.base_url!r}, deployment={self.deployment!r})"
+        return (
+            f"AzureConfig(base_url={self.base_url!r}, deployment={self.deployment!r}, "
+            f"key_source={self.key_source!r})"
+        )
 
 
 @dataclass(frozen=True)
@@ -113,29 +128,75 @@ def load_config(environ: Mapping[str, str] | None = None) -> AzureConfig:
     """
     Read and validate the settings.
 
+    The encrypted key, when present, is decrypted here and wins over a plain one.
+
     Raises:
         AiNotConfigured: Naming the variable that is missing or malformed. The
-            message never contains the key.
+            message never contains the key, the token or the decryption key.
     """
     env = os.environ if environ is None else environ
     endpoint = env.get(ENV_ENDPOINT, "").strip()
-    api_key = env.get(ENV_API_KEY, "").strip()
+    plain_key = env.get(ENV_API_KEY, "").strip()
+    encrypted_key = env.get(ENV_API_KEY_ENCRYPTED, "").strip()
+    decryption_key = env.get(ENV_DECRYPTION_KEY, "").strip()
     deployment = env.get(ENV_DEPLOYMENT, "").strip()
-    missing = [
-        name
-        for name, value in ((ENV_ENDPOINT, endpoint), (ENV_API_KEY, api_key), (ENV_DEPLOYMENT, deployment))
-        if not value
-    ]
+
+    missing = []
+    if not endpoint:
+        missing.append(ENV_ENDPOINT)
+    if encrypted_key:
+        if not decryption_key:
+            missing.append(ENV_DECRYPTION_KEY)
+    elif not plain_key:
+        missing.append(f"{ENV_API_KEY_ENCRYPTED} (or {ENV_API_KEY} for local use)")
+    if not deployment:
+        missing.append(ENV_DEPLOYMENT)
     if missing:
         raise AiNotConfigured("Not set: " + ", ".join(missing))
-    return AzureConfig(base_url=normalize_endpoint(endpoint), api_key=api_key, deployment=deployment)
+
+    if encrypted_key:
+        try:
+            api_key = _secret.decrypt(encrypted_key, decryption_key)
+        except _secret.SecretError as error:
+            raise AiNotConfigured(
+                f"Cannot decrypt {ENV_API_KEY_ENCRYPTED} with {ENV_DECRYPTION_KEY}: {error}"
+            ) from None
+        source = KEY_SOURCE_ENCRYPTED
+    else:
+        api_key, source = plain_key, KEY_SOURCE_PLAIN
+    return AzureConfig(
+        base_url=normalize_endpoint(endpoint),
+        api_key=api_key,
+        deployment=deployment,
+        key_source=source,
+    )
+
+
+def configuration_warnings(environ: Mapping[str, str] | None = None) -> list[str]:
+    """Things that are valid but probably a mistake, for the startup log."""
+    env = os.environ if environ is None else environ
+    warnings = []
+    if env.get(ENV_API_KEY_ENCRYPTED, "").strip() and env.get(ENV_API_KEY, "").strip():
+        warnings.append(
+            f"{ENV_API_KEY} is set but ignored because {ENV_API_KEY_ENCRYPTED} takes precedence; "
+            "remove the plain key from the environment."
+        )
+    return warnings
 
 
 def redact(text: str, config: AzureConfig | None = None) -> str:
-    """Remove the key, bearer tokens and ``sk-`` style keys from a message."""
-    secret = config.api_key if config else os.environ.get(ENV_API_KEY, "")
-    if secret:
-        text = text.replace(secret, _REDACTED)
+    """
+    Remove every secret of this module, bearer tokens and ``sk-`` style keys from a message.
+
+    The key in use, the plain key, the encrypted token and the decryption key are
+    all removed, whichever of them the message happens to contain.
+    """
+    secrets = [config.api_key] if config else []
+    secrets += [os.environ.get(name, "") for name in (ENV_API_KEY, ENV_API_KEY_ENCRYPTED, ENV_DECRYPTION_KEY)]
+    for secret in secrets:
+        secret = secret.strip()
+        if secret:
+            text = text.replace(secret, _REDACTED)
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}\b", _REDACTED, text)
     return re.sub(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+", rf"\1{_REDACTED}", text)
 

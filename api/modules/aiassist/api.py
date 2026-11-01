@@ -35,6 +35,7 @@ from api.modules.aiassist.domain import (
     AiNotConfigured,
     AiStatus,
 )
+from api.modules.aiassist.internal import _client
 from api.modules.aiassist.internal._sanitize import ALLOWED_CLASSES
 from api.modules.aiassist.services import AiService
 
@@ -58,13 +59,19 @@ __all__ = [
     "install_service",
     "is_configured",
     "configuration_error",
+    "configuration_warnings",
     "deployment_name",
+    "key_source",
     "start",
     "status",
     "shutdown",
 ]
 
 ensure_schema = repo.ensure_schema
+
+#: Things that are valid but probably a mistake (e.g. a plain key left next to
+#: the encrypted one), for the startup log.
+configuration_warnings = _client.configuration_warnings
 
 #: The stored answer of a question (``None`` if it was never asked), and every
 #: stored answer in the order asked for. Both take an open connection.
@@ -112,6 +119,11 @@ def configuration_error() -> str | None:
 def deployment_name() -> str:
     """Name of the configured deployment, or ``""`` when not configured."""
     return _get_service().deployment_name()
+
+
+def key_source() -> str:
+    """Where the key in use came from (``"encrypted"`` or ``"plain"``); ``""`` when not configured."""
+    return _get_service().key_source()
 
 
 def start(question_id: int, image_path: Path) -> AiStatus:

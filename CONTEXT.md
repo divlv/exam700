@@ -151,6 +151,23 @@ request is paid for - so resetting statistics does not touch it. Russian UI:
 *ответ AI*; the list of them is the *AI-проверки* screen.
 _Avoid_: "cache" - a stored AI answer is the record, not an optimisation.
 
+**Encrypted API key**:
+The Azure OpenAI key stored as a Fernet token, with the key that opens it kept
+in a *different* Kubernetes Secret and never written to a manifest file. The
+application decrypts it when it starts. It protects against a leaked manifest,
+copy or pasted `get secret`; it does not protect against anyone who can read
+both Secrets or the running process. Russian UI/docs: *зашифрованный ключ*,
+*ключ расшифровки*.
+_Avoid_: "secret storage" or "vault" - this is encryption with a key the
+application itself must be handed, not a key-management service.
+
+**Login secret**:
+The one accepted login, taken from `AZ_700_LOGIN` (a Secret in the cluster)
+instead of the source, which is public. It works like a password: compared in
+constant time, case-sensitive, never in the cookie or the log. If it is not set
+nobody can log in; there is no fallback value. Russian UI: *логин*.
+_Avoid_: "username" - there is only one, and it is the secret.
+
 **Running check**:
 An AI check whose request is with the model right now. At most one per
 question, so a double click or a second tab joins it instead of paying twice.

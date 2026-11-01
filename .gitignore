@@ -281,3 +281,7 @@ __marimo__/
 # committed; only the .example.yaml templates with placeholder values are.
 deploy/k3s/*-secret.yaml
 deploy/
+
+# Output of `python -m api.modules.aiassist.keytool generate`: the encrypted
+# Azure OpenAI key and, above all, the key that opens it.
+az700-ai-key.*

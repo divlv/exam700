@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from api.modules.aiassist.domain import AiNotConfigured
-from api.modules.aiassist.internal import _client, _prompt
+from api.modules.aiassist.internal import _client, _prompt, _secret
 
 KEY = "super-secret-key-1234567890"
 ENDPOINT = "https://example.openai.azure.com/openai/v1"
@@ -283,3 +283,132 @@ def test_redact_removes_keys_and_bearer_tokens():
     cleaned = _client.redact(text, config)
 
     assert KEY not in cleaned and "abc.def.ghi" not in cleaned and "sk-ABCDEFGHIJKLMNOP1234" not in cleaned
+
+
+# --- the encrypted key ------------------------------------------------------
+
+
+def _encrypted_env(plain_key: str = KEY, **extra: str) -> dict[str, str]:
+    """Settings as the cluster provides them: the key encrypted, the decryption key apart."""
+    decryption_key = _secret.generate_key()
+    env = {k: v for k, v in ENV.items() if k != "AZURE_OPENAI_API_KEY"}
+    env["AZURE_OPENAI_API_KEY_ENCRYPTED"] = _secret.encrypt(plain_key, decryption_key)
+    env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"] = decryption_key
+    env.update(extra)
+    return env
+
+
+def test_the_encrypted_key_is_decrypted_into_the_config():
+    config = _client.load_config(_encrypted_env())
+
+    assert config.api_key == KEY
+    assert config.key_source == "encrypted"
+
+
+def test_a_plain_key_still_works_for_local_use():
+    config = _client.load_config(ENV)
+
+    assert config.api_key == KEY
+    assert config.key_source == "plain"
+
+
+def test_the_encrypted_key_wins_over_a_plain_one():
+    env = _encrypted_env(plain_key="the-real-key-0000000000", AZURE_OPENAI_API_KEY="a-stale-plain-key")
+
+    assert _client.load_config(env).api_key == "the-real-key-0000000000"
+
+
+def test_an_encrypted_key_without_its_decryption_key_names_what_is_missing():
+    env = _encrypted_env()
+    token = env["AZURE_OPENAI_API_KEY_ENCRYPTED"]
+    del env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"]
+
+    with pytest.raises(AiNotConfigured) as caught:
+        _client.load_config(env)
+
+    assert "AZURE_OPENAI_API_KEY_DECRYPTION_KEY" in str(caught.value)
+    assert token not in str(caught.value)
+
+
+def test_nothing_set_for_the_key_points_at_the_encrypted_variable():
+    env = {k: v for k, v in ENV.items() if k != "AZURE_OPENAI_API_KEY"}
+
+    with pytest.raises(AiNotConfigured) as caught:
+        _client.load_config(env)
+
+    assert "AZURE_OPENAI_API_KEY_ENCRYPTED" in str(caught.value)
+
+
+def test_the_wrong_decryption_key_is_reported_without_any_secret():
+    env = _encrypted_env()
+    token = env["AZURE_OPENAI_API_KEY_ENCRYPTED"]
+    wrong = _secret.generate_key()
+    env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"] = wrong
+
+    with pytest.raises(AiNotConfigured) as caught:
+        _client.load_config(env)
+
+    message = str(caught.value)
+    assert "AZURE_OPENAI_API_KEY_ENCRYPTED" in message and "AZURE_OPENAI_API_KEY_DECRYPTION_KEY" in message
+    for secret in (KEY, token, wrong):
+        assert secret not in message
+
+
+def test_a_damaged_encrypted_value_and_a_malformed_decryption_key_are_reported_safely():
+    env = _encrypted_env()
+    for variable, junk in (
+        ("AZURE_OPENAI_API_KEY_ENCRYPTED", "gAAAAAB-not-a-real-token"),
+        ("AZURE_OPENAI_API_KEY_DECRYPTION_KEY", "not-a-fernet-key"),
+    ):
+        broken = {**env, variable: junk}
+        with pytest.raises(AiNotConfigured) as caught:
+            _client.load_config(broken)
+        assert junk not in str(caught.value)
+
+
+def test_the_repr_of_the_config_shows_neither_key_nor_token():
+    env = _encrypted_env()
+    config = _client.load_config(env)
+
+    text = repr(config)
+
+    assert "encrypted" in text
+    for secret in (KEY, env["AZURE_OPENAI_API_KEY_ENCRYPTED"], env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"]):
+        assert secret not in text
+
+
+def test_redact_also_removes_the_token_and_the_decryption_key(monkeypatch):
+    env = _encrypted_env()
+    for name in ("AZURE_OPENAI_API_KEY_ENCRYPTED", "AZURE_OPENAI_API_KEY_DECRYPTION_KEY"):
+        monkeypatch.setenv(name, env[name])
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "a-plain-key-from-the-environment")
+    config = _client.load_config(env)
+    leaky = " | ".join(
+        [
+            KEY,
+            env["AZURE_OPENAI_API_KEY_ENCRYPTED"],
+            env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"],
+            "a-plain-key-from-the-environment",
+        ]
+    )
+
+    cleaned = _client.redact(leaky, config)
+
+    for secret in (
+        KEY,
+        env["AZURE_OPENAI_API_KEY_ENCRYPTED"],
+        env["AZURE_OPENAI_API_KEY_DECRYPTION_KEY"],
+        "a-plain-key-from-the-environment",
+    ):
+        assert secret not in cleaned
+
+
+def test_a_plain_key_left_next_to_the_encrypted_one_is_warned_about():
+    both = _encrypted_env(AZURE_OPENAI_API_KEY="stale-plain-key-123456")
+
+    (warning,) = _client.configuration_warnings(both)
+
+    assert "AZURE_OPENAI_API_KEY" in warning and "ignored" in warning
+    assert "stale-plain-key-123456" not in warning
+    assert _client.configuration_warnings(_encrypted_env()) == []
+    assert _client.configuration_warnings(ENV) == []

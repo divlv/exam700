@@ -19,6 +19,10 @@ from api.modules.questionbank import api as questionbank
 from api.modules.shared import api as shared
 from api.modules.shared.internal import _db as db_internal
 
+#: The login the test application is configured with (``AZ_700_LOGIN``): mixed
+#: case and symbols on purpose, because the login is case-sensitive and secret.
+TEST_LOGIN = "Test-Login_9xQ"
+
 #: A minimal valid 1x1 PNG, so /img/ requests have a real file to serve
 #: without pulling in Pillow just for test fixtures.
 _TINY_PNG = base64.b64decode(
@@ -59,6 +63,7 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setattr(shared, "DB_PATH", db_path)
     monkeypatch.setenv("AZ700_SESSION_SECRET", "test-secret")
     monkeypatch.setenv("AZ700_SESSION_SECURE", "0")
+    monkeypatch.setenv("AZ_700_LOGIN", TEST_LOGIN)
 
     conn = db_internal.connect(db_path)
     questionbank.ensure_schema(conn)
@@ -77,8 +82,14 @@ def client(tmp_path, monkeypatch) -> Iterator[TestClient]:
 
 
 @pytest.fixture()
+def test_login() -> str:
+    """The login the application under test is configured with."""
+    return TEST_LOGIN
+
+
+@pytest.fixture()
 def logged_in_client(client: TestClient) -> TestClient:
     """The same client, already authenticated as the one recognised login."""
-    response = client.post("/login", data={"login": "dima", "next": "/"})
+    response = client.post("/login", data={"login": TEST_LOGIN, "next": "/"})
     assert response.status_code == 200  # redirects were followed to "/"
     return client

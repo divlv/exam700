@@ -6,3 +6,4 @@ itsdangerous>=2.2       # required by starlette.middleware.sessions.SessionMiddl
 python-multipart>=0.0.9 # required by Starlette/FastAPI to parse login form data
 openai>=2.54,<3         # Azure OpenAI client for the "AI" check; the API shape was verified against 2.x only
 nh3>=0.3                # sanitises the HTML the model writes before it is stored and shown
+cryptography>=44        # Fernet: the Azure OpenAI key is stored encrypted and decrypted at startup

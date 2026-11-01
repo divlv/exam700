@@ -113,6 +113,13 @@ class AiService:
         except AiNotConfigured:
             return ""
 
+    def key_source(self) -> str:
+        """``"encrypted"`` or ``"plain"``: where the key in use came from; ``""`` when not configured."""
+        try:
+            return self._load_config().key_source
+        except AiNotConfigured:
+            return ""
+
     # --- requests ------------------------------------------------------
 
     def start(self, question_id: int, image_path: Path) -> AiStatus:

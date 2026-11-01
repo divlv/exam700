@@ -6,10 +6,11 @@ Jinja2 screens and the static assets. Run with:
 
     uvicorn web.main:app --host 0.0.0.0 --port 8000
 
-Configuration is entirely through environment variables, read here and in
-``api.modules.shared.api`` - there is no config file, matching the desktop
-build's "no configuration system" baseline plus the minimum the web deployment
-needs on top of it.
+Configuration is entirely through environment variables, read here, in
+``web.credentials`` (the login), in ``api.modules.shared.api`` (paths) and in
+``api.modules.aiassist`` (Azure OpenAI) - there is no config file, matching the
+desktop build's "no configuration system" baseline plus the minimum the web
+deployment needs on top of it.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from api.modules.aiassist import api as aiassist
 from api.modules.examsession import api as examsession
 from api.modules.questionbank import api as questionbank
 from api.modules.shared import api as shared
-from web import auth
+from web import auth, credentials
 from web.deps import NotAuthenticated
 from web.routes import admin, ai, exam, health, images, menu, results, session, settings
 from web.version import get_git_commit
@@ -102,12 +103,22 @@ async def _lifespan(app: FastAPI):
         examsession_version,
         aiassist_version,
     )
-    # The key is never logged; only whether the feature is on and which deployment.
+    # Neither the key nor the login is ever logged; only whether each is set.
     ai_problem = aiassist.configuration_error()
     if ai_problem is None:
-        logger.info("startup: ai=on deployment=%s", aiassist.deployment_name())
+        logger.info(
+            "startup: ai=on deployment=%s key=%s", aiassist.deployment_name(), aiassist.key_source()
+        )
     else:
         logger.info("startup: ai=off reason=%s", ai_problem)
+    for warning in aiassist.configuration_warnings():
+        logger.warning("startup: %s", warning)
+    if credentials.is_configured():
+        logger.info("startup: auth: login=configured")
+    else:
+        logger.error(
+            "startup: auth: login=NOT SET - nobody can log in until %s is set", credentials.ENV_LOGIN
+        )
     yield
     aiassist.shutdown()
     logger.info("shutdown: run_id=%s", shared.get_run_id())

@@ -161,7 +161,17 @@ AZURE_OPENAI_ENDPOINT (https://dzaopenai.openai.azure.com/openai/v1) и AZURE_OP
 
 
 
+Полная инструкция в docs/deploy-k3s.md, «Шаг 4». Коротко:
 
+1. Сгенерируйте логин: python -c "import secrets; print(secrets.token_urlsafe(18))", сохраните в менеджер паролей.
+2. .venv\Scripts\python -m api.modules.aiassist.keytool generate --out-dir C:\tmp\az700-keys. Ключ Azure вводится скрыто.
+3. Впишите шифртекст и логин в az700-secret.yaml, открытый AZURE_OPENAI_API_KEY оттуда уберите. Если он уже был в Secret на сервере, пересоздайте Secret: delete, затем apply. Простое apply его не удалит.
+4. Скопируйте на сервер только файл .decryption-key, создайте из него Secret командой create secret generic az700-ai-key --from-file=DECRYPTION_KEY=…, затем удалите файл (shred -u) и локальные копии.
+5. Примените обновлённый az700-app.yaml.
+6. Только потом git push и drestart az700.
+7. В логе пода должны быть ai=on … key=encrypted и auth: login=configured.
+
+Порядок важен. Новый образ без LOGIN в Secret вас не пустит. Поправить можно, добавив LOGIN и сделав drestart.
 
 
 

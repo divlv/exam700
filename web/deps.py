@@ -14,12 +14,10 @@ from collections.abc import Iterator
 from fastapi import Request
 
 from api.modules.shared import api as shared
+from web import credentials
 
-#: The one login this application accepts. There is no password: the point is
-#: to keep the exam content off the open internet, not to protect a secret.
-AUTHORIZED_LOGIN = "dima"
-
-#: Session key holding the logged-in user's name, once authenticated.
+#: Session key holding the fingerprint of the login (see ``web.credentials``),
+#: once authenticated.
 SESSION_USER_KEY = "user"
 
 
@@ -57,14 +55,15 @@ def require_login(request: Request) -> str:
     FastAPI dependency that guards every non-public route.
 
     Returns:
-        The logged-in user's name.
+        The fingerprint of the login the session was started with.
 
     Raises:
-        NotAuthenticated: If the session cookie does not carry the expected
-            user. Handled by a top-level exception handler that redirects to
-            ``/login`` instead of returning a bare 401/403.
+        NotAuthenticated: If the session cookie does not belong to the current
+            login (or no login is configured at all). Handled by a top-level
+            exception handler that redirects to ``/login`` instead of returning
+            a bare 401/403.
     """
-    user = request.session.get(SESSION_USER_KEY)
-    if user != AUTHORIZED_LOGIN:
+    stored = request.session.get(SESSION_USER_KEY)
+    if not credentials.session_is_valid(stored):
         raise NotAuthenticated()
-    return user
+    return stored

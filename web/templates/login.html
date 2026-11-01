@@ -13,7 +13,9 @@
     <input type="hidden" name="next" value="{{ next }}">
     <div class="field">
       <label for="login">Логин</label>
-      <input type="text" id="login" name="login" autocomplete="username" autofocus required>
+      {# A secret, so it is masked; the phone keyboard must not capitalise or "correct" it. #}
+      <input type="password" id="login" name="login" autocomplete="current-password"
+             autocapitalize="off" autocorrect="off" spellcheck="false" autofocus required>
     </div>
     <button type="submit" class="btn btn-primary btn-block">Войти</button>
   </form>
