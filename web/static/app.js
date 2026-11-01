@@ -15,12 +15,46 @@
   const MAX_SCALE = 3.0;
   const ZOOM_STEP = 1.25;
 
+  // Every question is its own page load, so the zoom has to be remembered
+  // outside the page for it to carry over from one question to the next. It is
+  // kept per exam session: the stored value names the session it belongs to, and
+  // a different session ignores it and starts from the default (fit to width).
+  const ZOOM_STORAGE_KEY = "az700.zoom";
+
+  /** The zoom remembered for this session, or ``null`` if there is none. */
+  function readSavedZoom(sessionId) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ZOOM_STORAGE_KEY));
+      if (saved && saved.session === sessionId && typeof saved.fitted === "boolean") {
+        return saved;
+      }
+    } catch (error) {
+      // Storage can be blocked or hold junk; the zoom just starts from default.
+    }
+    return null;
+  }
+
+  function saveZoom(sessionId, fitted, scale) {
+    try {
+      localStorage.setItem(
+        ZOOM_STORAGE_KEY,
+        JSON.stringify({ session: sessionId, fitted, scale })
+      );
+    } catch (error) {
+      // Remembering the zoom is a convenience; never let it break the page.
+    }
+  }
+
   /** One image-viewer widget: toolbar buttons + a scrollable image. */
   function initImageViewer(root) {
     const scroll = root.querySelector(".image-viewer-scroll");
     const img = root.querySelector("img");
     const zoomLabel = root.querySelector(".image-viewer-zoom");
     if (!scroll || !img) return;
+
+    // Which exam session this viewer belongs to; a viewer without one (none
+    // today) simply does not remember its zoom.
+    const sessionId = root.dataset.session || null;
 
     let scale = 1;
     let fitted = true;
@@ -64,6 +98,27 @@
       apply();
     }
 
+    /**
+     * Remember the zoom the user just chose, for the next question. Called after
+     * the user's own actions only - not after the automatic fit on load or on
+     * window resize, which must not overwrite a chosen zoom.
+     */
+    function remember() {
+      if (sessionId) saveZoom(sessionId, fitted, scale);
+    }
+
+    /** Apply the zoom remembered for this session, or fit to width by default. */
+    function applyInitialZoom() {
+      const saved = sessionId ? readSavedZoom(sessionId) : null;
+      if (saved && !saved.fitted && Number.isFinite(saved.scale)) {
+        scale = clamp(saved.scale);
+        fitted = false;
+        apply();
+      } else {
+        fitToWidth();
+      }
+    }
+
     root.querySelectorAll("[data-action]").forEach((button) => {
       button.addEventListener("click", () => {
         const action = button.dataset.action;
@@ -71,7 +126,11 @@
         else if (action === "zoom-out") zoomBy(1 / ZOOM_STEP);
         else if (action === "fit-width") fitToWidth();
         else if (action === "actual-size") actualSize();
-        else if (action === "copy-image") copyImageToClipboard(img, button);
+        else if (action === "copy-image") {
+          copyImageToClipboard(img, button);
+          return; // not a zoom change
+        }
+        remember();
       });
     });
 
@@ -82,6 +141,7 @@
         if (!(event.ctrlKey || event.metaKey)) return;
         event.preventDefault();
         zoomBy(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+        remember();
       },
       { passive: false }
     );
@@ -93,6 +153,7 @@
       event.preventDefault();
       if (fitted) actualSize();
       else fitToWidth();
+      remember();
     }
     scroll.addEventListener("dblclick", onDoubleTap);
     scroll.addEventListener("touchend", (event) => {
@@ -102,9 +163,9 @@
     });
 
     if (img.complete && img.naturalWidth) {
-      fitToWidth();
+      applyInitialZoom();
     } else {
-      img.addEventListener("load", fitToWidth, { once: true });
+      img.addEventListener("load", applyInitialZoom, { once: true });
     }
 
     let resizeTimer = null;

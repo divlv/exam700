@@ -22,7 +22,7 @@
   </form>
 </div>
 
-<div class="image-viewer" data-role="exam"
+<div class="image-viewer" data-role="exam" data-session="{{ runner.session.id }}"
      data-showing="{{ 'answer' if revealed else 'question' }}"
      data-question-src="{{ question_image_url }}"
      data-answer-src="{{ answer_image_url }}">

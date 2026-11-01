@@ -232,3 +232,20 @@ def test_the_marks_survive_leaving_and_coming_back(logged_in_client):
 
     assert "🚩 отмечен" in review.text
     assert "ещё не показано 2" in review.text
+
+
+def test_the_viewer_carries_its_session_number_so_zoom_can_be_kept_per_session(logged_in_client):
+    """The page script stores the zoom under this number; a new session has a new one."""
+    import re
+
+    first = _start(logged_in_client)
+    first_id = re.search(r'class="image-viewer"[^>]*data-session="(\d+)"', first.text).group(1)
+
+    answer = logged_in_client.get("/exam/answer")
+    assert f'data-session="{first_id}"' in answer.text, "the same session on every question"
+
+    logged_in_client.post("/exam/abandon")
+    second = _start(logged_in_client)
+    second_id = re.search(r'class="image-viewer"[^>]*data-session="(\d+)"', second.text).group(1)
+
+    assert second_id != first_id
