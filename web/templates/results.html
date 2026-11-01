@@ -35,7 +35,7 @@
   </p>
   <p class="muted">Частично правильный ответ = {{ PARTIAL_CREDIT }} балла — для ответов, выставленных после этого правила; прежние оценки сохранили свои баллы.</p>
   {% endif %}
-  <p class="muted">Сессий: {{ overview.sessions }} · завершено: {{ overview.completed_sessions }} · сдано по порогу: {{ overview.passed_sessions }}</p>
+  <p class="muted">Сессий: {{ overview.sessions }} · завершено: {{ overview.completed_sessions }} · сдано по порогу: {{ overview.passed_sessions }}{% if overview.quick_questions %} · быстрых вопросов: {{ overview.quick_questions }} (входят в общий итог выше){% endif %}</p>
 </div>
 
 <div class="section">

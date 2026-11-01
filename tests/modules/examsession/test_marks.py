@@ -354,7 +354,7 @@ def test_a_database_without_the_mark_column_is_migrated_with_no_marks(tmp_path):
     )
     conn.commit()
 
-    assert examsession.ensure_schema(conn) == 4
+    assert examsession.ensure_schema(conn) == 5
 
     runner = examsession.resume_session(conn, 1)
     assert runner is not None

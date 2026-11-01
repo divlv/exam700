@@ -24,6 +24,8 @@ from api.modules.examsession.domain import (
     ENTRY_MARKED,
     ENTRY_PENDING,
     FULL_CREDIT,
+    KIND_QUICK,
+    KIND_TEST,
     PARTIAL_CREDIT_PERCENT,
     STATUS_ABANDONED,
     STATUS_COMPLETED,
@@ -528,7 +530,10 @@ class SessionRunner:
 
 
 def start_session(
-    conn: sqlite3.Connection, size: int, rng: random.Random | None = None
+    conn: sqlite3.Connection,
+    size: int,
+    rng: random.Random | None = None,
+    kind: str = KIND_TEST,
 ) -> SessionRunner:
     """
     Draw questions and open a session for them.
@@ -543,6 +548,8 @@ def start_session(
         conn: Open connection.
         size: How many questions to ask.
         rng: Random source, for reproducible tests.
+        kind: :data:`KIND_TEST`, or :data:`KIND_QUICK` for a single quick
+            question (see :func:`start_quick_question`).
 
     Returns:
         A runner positioned on the first question.
@@ -569,15 +576,32 @@ def start_session(
         questions.append(question)
         chosen.add(question.id)
 
-    session = repo.create_session(conn, size)
+    session = repo.create_session(conn, size, kind)
     repo.insert_plan(conn, session.id, [q.id for q in questions])
     logger.info(
-        "session %d started: %d questions of %d available",
+        "session %d started (%s): %d questions of %d available",
         session.id,
+        kind,
         size,
         questionbank.count_available(conn),
     )
     return SessionRunner(conn, session, questions, rng)
+
+
+def start_quick_question(
+    conn: sqlite3.Connection, rng: random.Random | None = None
+) -> SessionRunner:
+    """
+    Ask a single question, chosen by the same rules as any session's questions.
+
+    It is graded like any other answer and counts in the overall figures, but
+    it is not a session of its own: it is left out of the session list and out
+    of the session counts (see :class:`Overview`).
+
+    Raises:
+        NoQuestionsAvailable: If no question can be drawn.
+    """
+    return start_session(conn, 1, rng, kind=KIND_QUICK)
 
 
 def get_active_session(conn: sqlite3.Connection) -> ExamSession | None:
@@ -667,7 +691,11 @@ def _available_set(conn: sqlite3.Connection) -> set[int]:
 
 def list_sessions(conn: sqlite3.Connection) -> list[SessionSummary]:
     """
-    Summarise every session, newest first.
+    Summarise every test session, newest first.
+
+    Quick questions are not listed: they would bury the real sessions, and a
+    single question has no pass/fail result worth listing. Their grades still
+    count in :func:`get_overview`, and :func:`get_session_detail` still shows one.
 
     Grades whose question is no longer available are excluded from the tally but
     still counted in :attr:`SessionSummary.recorded`, so the screen can say how
@@ -690,6 +718,7 @@ def list_sessions(conn: sqlite3.Connection) -> list[SessionSummary]:
             recorded=recorded.get(session.id, 0),
         )
         for session in repo.list_sessions(conn)
+        if session.kind != KIND_QUICK
     ]
 
 
@@ -733,7 +762,8 @@ def get_overview(conn: sqlite3.Connection) -> Overview:
 
     Sessions are judged individually against the pass threshold, so
     ``passed_sessions`` is the number of sessions that cleared it, not a
-    percentage of answers.
+    percentage of answers. The answer figures (``tally``) cover every answer,
+    quick questions included; the session counts cover test sessions only.
     """
     summaries = list_sessions(conn)
     answers: list[tuple[str, int]] = []
@@ -750,6 +780,11 @@ def get_overview(conn: sqlite3.Connection) -> Overview:
             1 for s in summaries if s.session.status == STATUS_COMPLETED
         ),
         passed_sessions=sum(1 for s in summaries if s.tally.passed),
+        quick_questions=sum(
+            1
+            for session in repo.list_sessions(conn)
+            if session.kind == KIND_QUICK and session.status == STATUS_COMPLETED
+        ),
     )
 
 

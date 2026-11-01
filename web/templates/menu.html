@@ -29,6 +29,11 @@
 <div class="menu-list">
   <a href="/session/new" class="btn {{ 'btn-primary' if available > 0 else '' }}"
      {% if available == 0 %}aria-disabled="true" onclick="return false;" style="opacity:.5;"{% endif %}>Новая сессия</a>
+  {% if available > 0 and not active_session %}
+  <form method="post" action="/session/quick" style="margin:0;">
+    <button type="submit" class="btn btn-block" id="quick-btn" title="Один вопрос; результат войдёт в общую статистику">⚡ Быстрый вопрос</button>
+  </form>
+  {% endif %}
   <a href="/results" class="btn">Результаты и статистика</a>
   <a href="/admin" class="btn">Администрирование</a>
   <a href="/settings" class="btn">Настройки</a>

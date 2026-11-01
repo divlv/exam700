@@ -249,3 +249,83 @@ def test_the_viewer_carries_its_session_number_so_zoom_can_be_kept_per_session(l
     second_id = re.search(r'class="image-viewer"[^>]*data-session="(\d+)"', second.text).group(1)
 
     assert second_id != first_id
+
+
+# ---------------------------------------------------------------------------
+# Quick question: one question on its own
+# ---------------------------------------------------------------------------
+
+
+def test_the_menu_offers_a_quick_question(logged_in_client):
+    menu = logged_in_client.get("/")
+
+    assert 'id="quick-btn"' in menu.text
+    assert "Быстрый вопрос" in menu.text
+
+
+def test_a_quick_question_is_asked_graded_and_shown_as_a_result(logged_in_client):
+    asked = logged_in_client.post("/session/quick")
+
+    assert asked.url.path == "/exam"
+    assert "Быстрый вопрос" in asked.text
+    assert "Вопрос 1 из" not in asked.text, "it is not numbered like a test"
+    assert 'id="mark-btn"' not in asked.text, "a single question has nothing to postpone"
+    assert 'href="/exam/review"' not in asked.text
+
+    logged_in_client.get("/exam/answer")
+    result = logged_in_client.post("/exam/grade", data={"grade": "correct"})
+
+    assert "/results/" in str(result.url)
+    assert "Быстрый вопрос" in result.text
+    assert "Правильно" in result.text
+    assert "Результат учтён в общей статистике" in result.text
+    assert "Ещё один быстрый вопрос" in result.text
+    assert "порог" not in result.text, "no pass/fail threshold for a single question"
+
+
+def test_the_quick_answer_counts_in_the_overall_figures_but_not_as_a_session(logged_in_client):
+    logged_in_client.post("/session/quick")
+    logged_in_client.post("/exam/grade", data={"grade": "partial"})
+
+    results = logged_in_client.get("/results")
+
+    assert "Сессий: 0 · завершено: 0 · сдано по порогу: 0" in results.text
+    assert "быстрых вопросов: 1" in results.text
+    assert "0.34 из 1" in results.text, "the overall figures include the quick answer"
+    assert "Сессий ещё не было." in results.text, "and it is not listed as a session"
+    menu = logged_in_client.get("/")
+    assert "пройдено сессий: 0" in menu.text
+
+
+def test_another_quick_question_can_be_asked_from_the_result(logged_in_client):
+    logged_in_client.post("/session/quick")
+    result = logged_in_client.post("/exam/grade", data={"grade": "incorrect"})
+    assert "Неправильно" in result.text
+
+    again = logged_in_client.post("/session/quick")
+
+    assert again.url.path == "/exam"
+    assert "Быстрый вопрос" in again.text
+
+
+def test_declining_a_quick_question_leaves_no_trace(logged_in_client):
+    logged_in_client.post("/session/quick")
+
+    declined = logged_in_client.post("/exam/abandon")
+
+    assert declined.url.path == "/"
+    assert "Продолжить" not in declined.text, "no unfinished session is left behind"
+    results = logged_in_client.get("/results")
+    assert "быстрых вопросов" not in results.text
+    assert "Сессий ещё не было." in results.text
+
+
+def test_a_quick_question_is_not_started_on_top_of_a_session_in_progress(logged_in_client):
+    _start(logged_in_client)
+    menu = logged_in_client.get("/")
+    assert 'id="quick-btn"' not in menu.text, "finish or leave the session first"
+
+    attempt = logged_in_client.post("/session/quick")
+
+    assert attempt.url.path == "/exam"
+    assert "Вопрос 1 из 3" in attempt.text, "taken back to the session in progress"

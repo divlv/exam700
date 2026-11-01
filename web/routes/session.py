@@ -1,9 +1,10 @@
 """
-Starting a new exam session.
+Starting a new exam session, or a single quick question.
 
-The only choice offered - on the desktop and here - is how many questions to
-draw: no topic filters, no difficulty, no "mistakes only" mode. Questions are
-always drawn uniformly at random from the available pool.
+The only choice offered for a session - on the desktop and here - is how many
+questions to draw: no topic filters, no difficulty, no "mistakes only" mode. The
+questions themselves are chosen by the answer-history rules in
+``examsession``; a quick question is chosen by the very same rules.
 """
 
 from __future__ import annotations
@@ -76,4 +77,24 @@ def new_session_submit(
         return _render_form(request, conn, error="Недостаточно доступных вопросов.")
 
     examsession.set_default_question_count(conn, size)
+    return RedirectResponse(url="/exam", status_code=303)
+
+
+@router.post("/session/quick")
+def quick_question(
+    conn: sqlite3.Connection = Depends(get_db),
+    _: str = Depends(require_login),
+):
+    """
+    Ask one question on its own, chosen like any session's questions.
+
+    Never started on top of an unfinished session: that one would be left
+    hanging, so the user is taken back to it instead.
+    """
+    if examsession.get_active_session(conn) is not None:
+        return RedirectResponse(url="/exam", status_code=303)
+    try:
+        examsession.start_quick_question(conn)
+    except examsession.NoQuestionsAvailable:
+        return RedirectResponse(url="/", status_code=303)
     return RedirectResponse(url="/exam", status_code=303)

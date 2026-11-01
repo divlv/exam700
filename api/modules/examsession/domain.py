@@ -33,6 +33,14 @@ STATUS_COMPLETED = "completed"
 STATUS_ABANDONED = "abandoned"
 
 
+#: A regular test of a chosen number of questions, or a "quick question": one
+#: question asked on its own. Both store their answers the same way and both
+#: count in the overall answer figures; a quick question is not counted as a
+#: session of its own (see :class:`Overview`) and is left out of the session list.
+KIND_TEST = "test"
+KIND_QUICK = "quick"
+
+
 @dataclass(frozen=True)
 class ExamSession:
     """
@@ -46,6 +54,7 @@ class ExamSession:
         planned_count: How many questions the user asked for.
         status: One of :data:`STATUS_IN_PROGRESS`, :data:`STATUS_COMPLETED`,
             :data:`STATUS_ABANDONED`.
+        kind: :data:`KIND_TEST` or :data:`KIND_QUICK`.
     """
 
     id: int
@@ -53,6 +62,7 @@ class ExamSession:
     finished_at: str | None
     planned_count: int
     status: str
+    kind: str = KIND_TEST
 
 
 @dataclass(frozen=True)
@@ -262,16 +272,20 @@ class Overview:
     Statistics across every session.
 
     Attributes:
-        tally: All counted grades from all sessions.
-        sessions: How many sessions are stored.
-        completed_sessions: How many were played to the end.
+        tally: All counted grades from all sessions, quick questions included.
+        sessions: How many test sessions are stored. Quick questions are not
+            sessions: one question cannot "pass" a threshold in any useful sense.
+        completed_sessions: How many of them were played to the end.
         passed_sessions: How many cleared the threshold on their own.
+        quick_questions: How many quick questions were answered. Their grades
+            are already in ``tally``.
     """
 
     tally: Tally
     sessions: int
     completed_sessions: int
     passed_sessions: int
+    quick_questions: int = 0
 
 
 # code-documentation-2026-09-06T09:40:00

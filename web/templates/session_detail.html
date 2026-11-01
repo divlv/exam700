@@ -1,10 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Сессия от {{ detail.summary.session.started_at[:16].replace("T", " ") }} — AZ-700{% endblock %}
+{% block title %}{% if detail.summary.session.kind == "quick" %}Быстрый вопрос{% else %}Сессия от {{ detail.summary.session.started_at[:16].replace("T", " ") }}{% endif %} — AZ-700{% endblock %}
 {% block content %}
 {% set summary = detail.summary %}
 {% set tally = summary.tally %}
+{% set is_quick = summary.session.kind == "quick" %}
 <div class="row row-wrap">
-  <h1>Сессия от {{ summary.session.started_at.replace("T", " ")[:16] }}</h1>
+  <h1>{% if is_quick %}Быстрый вопрос{% else %}Сессия от {{ summary.session.started_at.replace("T", " ")[:16] }}{% endif %}</h1>
   <div class="btn-group-row">
     <a href="/results" class="btn">К результатам</a>
     <a href="/" class="btn">В меню</a>
@@ -12,7 +13,22 @@
 </div>
 
 <div class="section">
+  {% if is_quick %}
   {% if tally.total == 0 %}
+  <p class="muted">Нет зачтённого ответа.</p>
+  {% else %}
+  <p>
+    {% if tally.correct %}<span class="badge badge-good">Правильно</span>
+    {% elif tally.partial %}<span class="badge badge-warn">Частично</span>
+    {% else %}<span class="badge badge-bad">Неправильно</span>{% endif %}
+    — {{ "%.2f"|format(tally.points) }} из 1
+  </p>
+  <p class="muted">Результат учтён в общей статистике.</p>
+  {% endif %}
+  <form method="post" action="/session/quick" style="margin-top:12px;">
+    <button type="submit" class="btn btn-primary btn-block">⚡ Ещё один быстрый вопрос</button>
+  </form>
+  {% elif tally.total == 0 %}
   <p class="muted">Нет зачтённых вопросов.</p>
   {% else %}
   <p>

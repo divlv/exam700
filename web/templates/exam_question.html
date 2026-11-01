@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Вопрос {{ position }} из {{ runner.total }} — AZ-700{% endblock %}
+{% block title %}{% if runner.session.kind == "quick" %}Быстрый вопрос{% else %}Вопрос {{ position }} из {{ runner.total }}{% endif %} — AZ-700{% endblock %}
 {% block page_class %} page-exam{% endblock %}
 {% block content %}
 <div class="exam-header row row-wrap">
   <div>
-    <h1>Вопрос {{ position }} из {{ runner.total }}</h1>
+    <h1>{% if runner.session.kind == "quick" %}⚡ Быстрый вопрос{% else %}Вопрос {{ position }} из {{ runner.total }}{% endif %}</h1>
     <div class="exam-meta">
       №{{ question.id }} в наборе
       {% if entry.state == "marked" %}
@@ -69,9 +69,11 @@
   {% endif %}
   <div class="secondary-actions">
     <form method="post" action="/exam/abandon"
-          data-confirm="Прервать сессию? Уже выставленные оценки сохранятся.">
+          data-confirm="{% if runner.session.kind == 'quick' %}Отказаться от этого вопроса? Он не будет засчитан.{% else %}Прервать сессию? Уже выставленные оценки сохранятся.{% endif %}">
       <button type="submit" class="btn-link" id="abandon-btn">Прервать (Esc)</button>
     </form>
+    {# A quick question is a single question: nothing to postpone or review. #}
+    {% if runner.session.kind != "quick" %}
     <div class="secondary-actions-right">
       <a href="/exam/review" class="btn btn-sm">Обзор</a>
       {% if entry.state == "marked" %}
@@ -86,6 +88,7 @@
       </form>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 </div>
 

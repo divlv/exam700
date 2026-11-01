@@ -13,6 +13,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from api.modules.examsession.domain import (
+    KIND_TEST,
     STATUS_COMPLETED,
     STATUS_IN_PROGRESS,
     ExamSession,
@@ -106,6 +107,14 @@ _MIGRATIONS: list[tuple[int, list[str]]] = [
             "ALTER TABLE session_questions ADD COLUMN marked INTEGER NOT NULL DEFAULT 0",
         ],
     ),
+    (
+        5,
+        [
+            # "test" for a regular session, "quick" for a single quick question.
+            # Everything stored so far was a regular session.
+            "ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'test'",
+        ],
+    ),
 ]
 
 
@@ -135,24 +144,28 @@ def _row_to_session(row: sqlite3.Row) -> ExamSession:
         finished_at=row["finished_at"],
         planned_count=row["planned_count"],
         status=row["status"],
+        kind=row["kind"],
     )
 
 
-def create_session(conn: sqlite3.Connection, planned_count: int) -> ExamSession:
+def create_session(
+    conn: sqlite3.Connection, planned_count: int, kind: str = KIND_TEST
+) -> ExamSession:
     """
     Open a new session.
 
     Args:
         conn: Open connection.
         planned_count: How many questions the user asked for.
+        kind: :data:`KIND_TEST` or :data:`KIND_QUICK`.
 
     Returns:
         The stored session, with its assigned id.
     """
     cursor = conn.execute(
-        "INSERT INTO sessions (started_at, finished_at, planned_count, status) "
-        "VALUES (?, NULL, ?, ?)",
-        (_now(), planned_count, STATUS_IN_PROGRESS),
+        "INSERT INTO sessions (started_at, finished_at, planned_count, status, kind) "
+        "VALUES (?, NULL, ?, ?, ?)",
+        (_now(), planned_count, STATUS_IN_PROGRESS, kind),
     )
     conn.commit()
 

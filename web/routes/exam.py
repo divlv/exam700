@@ -279,6 +279,11 @@ def abandon(
     runner = _active_runner(conn)
     if runner is None:
         return _redirect("/")
+    if runner.session.kind == examsession.KIND_QUICK and runner.graded == 0:
+        # Declining a quick question leaves nothing worth keeping: no answer, and
+        # a quick question is not a session. Drop it instead of listing an empty one.
+        examsession.reset_session(conn, runner.session.id)
+        return _redirect("/")
     if runner.complete:
         return _finish_and_redirect(runner)
     return _abandon_and_redirect(runner)

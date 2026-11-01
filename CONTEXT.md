@@ -36,6 +36,17 @@ _Avoid_: "broken question" alone, without the flag/administration context.
 One run through a fixed number of questions, from start to finish or
 abandonment. Russian UI: *сессия*.
 
+**Quick question**:
+A single question asked on its own, chosen by the same answer-history rules as
+the questions of a session. It is stored as a one-question session of kind
+`quick`, graded like any other answer, and its grade counts in the overall answer
+figures (correct / partial / incorrect and the score). It is *not* a session in
+the sense above: it is left out of the session list and the session counts
+(sessions, completed, passed the threshold) - one question cannot meaningfully
+pass or fail a threshold - and only its own number is kept (*quick questions*).
+Declining one before answering leaves no trace. Not started while a session is
+in progress. Russian UI: *быстрый вопрос*.
+
 **Session plan**:
 The ordered list of questions a session draws, decided once when the session
 starts and durable in the database (`session_questions`) rather than kept in

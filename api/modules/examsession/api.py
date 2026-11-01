@@ -23,6 +23,8 @@ from api.modules.examsession.domain import (
     ENTRY_GRADED,
     ENTRY_MARKED,
     ENTRY_PENDING,
+    KIND_QUICK,
+    KIND_TEST,
     PARTIAL_CREDIT_PERCENT,
     PASS_THRESHOLD_PERCENT,
     STATUS_ABANDONED,
@@ -52,6 +54,7 @@ from api.modules.examsession.services import (
     resume_session,
     set_auto_reveal,
     set_default_question_count,
+    start_quick_question,
     start_session,
 )
 from api.modules.questionbank.api import (
@@ -68,6 +71,8 @@ __all__ = [
     "ENTRY_MARKED",
     "ENTRY_PENDING",
     "ExamSession",
+    "KIND_QUICK",
+    "KIND_TEST",
     "GRADES",
     "GRADE_CORRECT",
     "GRADE_PARTIAL",
@@ -96,5 +101,6 @@ __all__ = [
     "resume_session",
     "set_auto_reveal",
     "set_default_question_count",
+    "start_quick_question",
     "start_session",
 ]
