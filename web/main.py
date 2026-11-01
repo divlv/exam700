@@ -26,12 +26,13 @@ from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from api.modules.aiassist import api as aiassist
 from api.modules.examsession import api as examsession
 from api.modules.questionbank import api as questionbank
 from api.modules.shared import api as shared
 from web import auth
 from web.deps import NotAuthenticated
-from web.routes import admin, exam, health, images, menu, results, session, settings
+from web.routes import admin, ai, exam, health, images, menu, results, session, settings
 from web.version import get_git_commit
 
 logger = shared.get_logger(__name__)
@@ -83,19 +84,32 @@ async def _lifespan(app: FastAPI):
     try:
         questionbank_version = questionbank.ensure_schema(conn)
         examsession_version = examsession.ensure_schema(conn)
+        aiassist_version = aiassist.ensure_schema(conn)
     finally:
         conn.close()
 
+    # A fresh service per start, so no request of a previous run is remembered.
+    aiassist.install_service(aiassist.AiService())
+
     logger.info(
-        "startup: run_id=%s commit=%s data_dir=%s db_path=%s schema questionbank=v%d examsession=v%d",
+        "startup: run_id=%s commit=%s data_dir=%s db_path=%s "
+        "schema questionbank=v%d examsession=v%d aiassist=v%d",
         shared.get_run_id(),
         get_git_commit(),
         shared.DATA_DIR,
         shared.DB_PATH,
         questionbank_version,
         examsession_version,
+        aiassist_version,
     )
+    # The key is never logged; only whether the feature is on and which deployment.
+    ai_problem = aiassist.configuration_error()
+    if ai_problem is None:
+        logger.info("startup: ai=on deployment=%s", aiassist.deployment_name())
+    else:
+        logger.info("startup: ai=off reason=%s", ai_problem)
     yield
+    aiassist.shutdown()
     logger.info("shutdown: run_id=%s", shared.get_run_id())
 
 
@@ -142,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(session.router)
     app.include_router(exam.router)
     app.include_router(results.router)
+    app.include_router(ai.router)
     app.include_router(admin.router)
     app.include_router(settings.router)
     app.include_router(images.router)

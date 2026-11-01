@@ -74,6 +74,15 @@
     </summary>
     <div class="answer-row-body">
       {% if row.question %}
+      <div class="answer-row-tools">
+        {% if ai_enabled() %}
+        <button type="button" class="btn btn-sm btn-ai" data-ai-open data-question="{{ answer.question_id }}"
+                title="Спросить модель в Azure OpenAI. Ответ сохраняется, второй раз за вопрос платить не придётся">✨ AI</button>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-ai" disabled
+                title="AI не настроен: на сервере нет настроек Azure OpenAI">✨ AI</button>
+        {% endif %}
+      </div>
       <p class="muted">Вопрос</p>
       <img src="{{ row.question_image_url }}" alt="Текст вопроса №{{ answer.question_id }}" loading="lazy">
       <p class="muted">Ответ</p>
@@ -95,4 +104,5 @@
   {% endfor %}
   {% endif %}
 </div>
+{% include "_ai_dialog.html" %}
 {% endblock %}

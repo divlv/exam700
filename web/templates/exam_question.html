@@ -14,12 +14,21 @@
       {% endif %}
     </div>
   </div>
-  <form method="post" action="/exam/flag"
-        data-confirm="Пометить этот вопрос как некорректно вырезанный? Он будет исключён из всех будущих сессий."
-        class="exam-flag-form">
-    <input type="hidden" name="position" value="{{ position }}">
-    <button type="submit" class="btn">Вопрос некорректный</button>
-  </form>
+  <div class="exam-header-actions">
+    {% if ai_enabled() %}
+    <button type="button" class="btn btn-ai" id="ai-btn" data-ai-open data-question="{{ question.id }}"
+            title="Спросить модель в Azure OpenAI. Ответ сохраняется, второй раз за вопрос платить не придётся">✨ AI</button>
+    {% else %}
+    <button type="button" class="btn btn-ai" id="ai-btn" disabled
+            title="AI не настроен: на сервере нет настроек Azure OpenAI">✨ AI</button>
+    {% endif %}
+    <form method="post" action="/exam/flag"
+          data-confirm="Пометить этот вопрос как некорректно вырезанный? Он будет исключён из всех будущих сессий."
+          class="exam-flag-form">
+      <input type="hidden" name="position" value="{{ position }}">
+      <button type="submit" class="btn">Вопрос некорректный</button>
+    </form>
+  </div>
 </div>
 
 <div class="image-viewer" data-role="exam" data-session="{{ runner.session.id }}"
@@ -93,4 +102,5 @@
 </div>
 
 <script id="preload-urls" type="application/json">{{ preload_urls | tojson }}</script>
+{% include "_ai_dialog.html" %}
 {% endblock %}

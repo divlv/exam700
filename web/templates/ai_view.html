@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ответ AI — вопрос №{{ answer.question_id }}</title>
+{# Shown inside a sandboxed frame with a policy that allows no scripts and no
+   outside resources, so this page carries its own styles and nothing else. #}
+<style>
+  :root {
+    --bg: #ffffff; --text: #1f2420; --muted: #6b665f; --border: #ddd8d0;
+    --brand: #1c6b4f; --good: #1e7d32; --good-bg: #e6f4ea;
+    --bad: #b3261e; --bad-bg: #fbe9e7; --warn: #8a6100; --warn-bg: #fdf3d9;
+    --tip-bg: #e8f0fb; --tip: #1d4f91; --code-bg: #f1efea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c2024; --text: #eef0ee; --muted: #a2a7a0; --border: #333a35;
+      --brand: #35a37c; --good: #6fce8a; --good-bg: #163524;
+      --bad: #f28b83; --bad-bg: #3a1f1c; --warn: #e0bd4e; --warn-bg: #3a3018;
+      --tip-bg: #1b2a3f; --tip: #8fbaf0; --code-bg: #262b30;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; padding: 14px 16px 20px;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    overflow-wrap: anywhere;
+  }
+  p { margin: 0 0 10px; }
+  h3, h4 { margin: 14px 0 6px; line-height: 1.25; }
+  ul, ol { margin: 0 0 10px; padding-left: 22px; }
+  li { margin-bottom: 3px; }
+  code, pre { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; background: var(--code-bg); border-radius: 4px; }
+  code { padding: 1px 5px; }
+  pre { padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 12px; font-size: 0.95rem; }
+  th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  svg { display: block; max-width: 100%; height: auto; margin: 8px auto; }
+  svg text { fill: currentColor; }
+
+  .verdict, .opt, .tip, .note, .warn {
+    border-radius: 10px; padding: 10px 14px; margin: 0 0 10px; border: 1px solid transparent;
+  }
+  .verdict { background: var(--good-bg); border-color: var(--good); font-size: 1.08rem; font-weight: 600; }
+  .opt { border-color: var(--border); }
+  .opt.right { background: var(--good-bg); border-color: var(--good); }
+  .opt.wrong { background: var(--bad-bg); border-color: var(--bad); }
+  .tip { background: var(--tip-bg); color: var(--tip); border-color: var(--tip); }
+  .note { border-color: var(--border); color: var(--muted); }
+  .warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  .tag { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; background: var(--code-bg); }
+</style>
+</head>
+<body>
+<article>{{ answer.html | safe }}</article>
+</body>
+</html>

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from api.modules.aiassist import api as aiassist
 from api.modules.examsession import api as examsession
 from web.version import get_git_commit
 
@@ -27,3 +28,6 @@ templates.env.globals["PARTIAL_CREDIT"] = examsession.PARTIAL_CREDIT_PERCENT / 1
 
 # Shown in every page's footer to tell deployed versions apart.
 templates.env.globals["GIT_COMMIT"] = get_git_commit()
+
+# Whether the "AI" buttons are live: false while the Azure OpenAI settings are missing.
+templates.env.globals["ai_enabled"] = aiassist.is_configured

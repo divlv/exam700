@@ -353,6 +353,111 @@ details.answer-row .answer-row-body img { width: 100%; height: auto; border: 1px
 .badge-bad { background: var(--bad-bg); color: var(--bad); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
 
+/* ------------------------------------------------------------------ AI */
+
+.exam-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.exam-header-actions .exam-flag-form { margin-top: 0; }
+.exam-header-actions form { margin: 0; }
+
+.btn-ai { border-color: var(--brand); color: var(--brand-dark); }
+.btn-ai:hover:not(:disabled) { background: var(--bg); }
+
+.answer-row-tools { margin: 0 0 10px; }
+
+/* Rows of the "AI checks" table open the popup. */
+.ai-row { cursor: pointer; }
+.ai-table td.ai-summary { min-width: 220px; }
+.ai-table td.ai-tokens { color: var(--muted); white-space: nowrap; }
+/* A date such as "2026-11-01 19:37" must stay on one line. */
+.ai-table td.ai-date { white-space: nowrap; }
+/* A long answer ("pair → choice; pair → choice") wraps in a rounded box, not a stretched pill. */
+.ai-table td.ai-answer-cell .badge { border-radius: 14px; text-align: left; }
+.sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
+.sort-link:hover, .sort-link.active { color: var(--brand-dark); text-decoration: underline; }
+.ai-open-link { font-size: 1rem; }
+
+@media (max-width: 768px) {
+  /* Card layout: the description is long text, so it gets its own full-width line. */
+  .ai-table td.ai-summary { min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+  /* A long answer wraps inside its badge; the label beside it must not wrap too. */
+  .ai-table td::before { white-space: nowrap; flex: none; }
+}
+
+/* The popup. A full-screen sheet on a phone, a large centred window on desktop. */
+.ai-dialog {
+  width: min(900px, 94vw);
+  height: 88vh;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  overflow: hidden;
+}
+.ai-dialog[open] { display: flex; flex-direction: column; }
+.ai-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+
+.ai-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.ai-dialog-head h2 { margin: 0; font-size: 1.05rem; }
+
+.ai-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+}
+.ai-dialog-body [hidden] { display: none !important; }
+
+.ai-loading, .ai-error { margin: auto; text-align: center; max-width: 440px; }
+.ai-loading-title { font-weight: 700; font-size: 1.1rem; margin-bottom: 4px; }
+.ai-loading-time { font-size: 1.6rem; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
+.ai-loading-hint { font-size: 0.92rem; }
+
+.ai-spinner {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 5px solid var(--border);
+  border-top-color: var(--brand);
+  animation: ai-spin 0.9s linear infinite;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-spinner { animation-duration: 3s; } }
+
+.ai-error p { color: var(--bad); font-weight: 600; }
+
+.ai-result { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.ai-meta { margin: 0; font-size: 0.85rem; flex: none; }
+.ai-question { flex: none; }
+.ai-question summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+/* A tall question is scrolled inside its own box instead of squeezed to fit. */
+.ai-question-scroll { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.ai-question-scroll img { display: block; width: 100%; height: auto; }
+
+@media (max-width: 768px) {
+  .ai-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: none; }
+}
+
 /* Build identifier (short git commit) at the foot of every page. */
 .page-footer {
   text-align: center;

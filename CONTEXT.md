@@ -133,3 +133,26 @@ answers graded correct.
 **Pass threshold**:
 A score of at least 70%. An empty tally (nothing counted) never passes.
 Russian UI: *порог сдачи*.
+
+**AI check**:
+Sending one question's picture to a model deployed in Azure OpenAI and keeping
+what it says. Triggered by the "AI" button; separate from the user's own grade
+(the model never grades anything). Russian UI: *AI-проверка*.
+_Avoid_: "grading" or "verifying" the user's answer - the model answers the
+question itself, and the dump's printed answer is sometimes wrong, which is the
+point of asking.
+
+**AI answer**:
+The stored result of one AI check, at most one per question: the model's short
+**answer** (e.g. "B"), a one-line **summary** of what the question is about
+(written by the model, because a question has no text of its own to list), and
+an explanation as sanitised HTML. Never replaced and never deleted - every
+request is paid for - so resetting statistics does not touch it. Russian UI:
+*ответ AI*; the list of them is the *AI-проверки* screen.
+_Avoid_: "cache" - a stored AI answer is the record, not an optimisation.
+
+**Running check**:
+An AI check whose request is with the model right now. At most one per
+question, so a double click or a second tab joins it instead of paying twice.
+Kept in memory only: a restart forgets it, which costs nothing because nothing
+was stored.

@@ -294,6 +294,9 @@
     document.addEventListener("keydown", (event) => {
       const tag = (event.target.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
+      // While a popup is open its keys belong to it: Escape must only close the
+      // popup (the browser does that), not also abandon the test behind it.
+      if (document.querySelector("dialog[open]")) return;
 
       const byId = (id) => document.getElementById(id);
       if (event.code === "Space") {
@@ -365,6 +368,207 @@
     apply();
   }
 
+  // How often the popup asks the server whether the model has finished, and how
+  // long it keeps asking. A request with high reasoning effort takes minutes;
+  // after the ceiling the popup stops waiting, but the request itself carries on
+  // on the server and the answer is there the next time the question is opened.
+  const AI_POLL_MS = 2000;
+  const AI_POLL_RETRY_MS = 4000;
+  const AI_GIVE_UP_MS = 12 * 60 * 1000;
+
+  /** "42 с" below a minute, "2 мин 05 с" above. */
+  function formatElapsed(totalSeconds) {
+    const seconds = Math.max(0, Math.floor(totalSeconds));
+    if (seconds < 60) return seconds + " с";
+    return Math.floor(seconds / 60) + " мин " + String(seconds % 60).padStart(2, "0") + " с";
+  }
+
+  /**
+   * The "AI" popup: one dialog shared by every button on the page.
+   *
+   * A click opens it and asks the server to check the question. The server
+   * answers at once if it already has the answer; otherwise it starts the model
+   * in the background and the popup polls until the answer is stored. The
+   * explanation is shown in a sandboxed frame (it is HTML written by a model).
+   * Closing the popup only stops the polling: nothing is lost on the server.
+   */
+  function initAi() {
+    const dialog = document.getElementById("ai-dialog");
+    if (!dialog) return;
+
+    const el = (id) => document.getElementById(id);
+    const panels = { loading: el("ai-loading"), error: el("ai-error"), result: el("ai-result") };
+    const frame = el("ai-frame");
+    const questionImg = el("ai-question-img");
+    const retryButton = el("ai-retry");
+
+    // One check is followed at a time; `run` ends the callbacks of an older one.
+    let run = 0;
+    let pollTimer = null;
+    let tickTimer = null;
+    let state = null;
+
+    function stopTimers() {
+      clearTimeout(pollTimer);
+      clearInterval(tickTimer);
+      pollTimer = null;
+      tickTimer = null;
+    }
+
+    function show(name) {
+      Object.keys(panels).forEach((key) => {
+        panels[key].hidden = key !== name;
+      });
+    }
+
+    function showError(message, canRetry) {
+      stopTimers();
+      el("ai-error-text").textContent = message;
+      retryButton.hidden = !canRetry;
+      show("error");
+    }
+
+    function showResult(meta, fromStore) {
+      stopTimers();
+      frame.src = "/ai/" + state.question + "/view";
+      const parts = [];
+      if (meta && meta.model) parts.push(meta.model);
+      if (meta && meta.created_at) parts.push(meta.created_at);
+      if (meta && meta.input_tokens !== undefined) {
+        parts.push((meta.input_tokens + meta.output_tokens) + " токенов");
+      }
+      parts.push(fromStore ? "сохранённый ответ" : "сохранено");
+      el("ai-meta").textContent = parts.join(" · ");
+      show("result");
+    }
+
+    /** Count the seconds on screen, continuing from what the server says has passed. */
+    function startTicking(elapsedSeconds) {
+      const startedAt = Date.now() - elapsedSeconds * 1000;
+      const label = el("ai-elapsed");
+      const update = () => {
+        label.textContent = formatElapsed((Date.now() - startedAt) / 1000);
+      };
+      clearInterval(tickTimer);
+      update();
+      tickTimer = setInterval(update, 1000);
+    }
+
+    async function call(method, path) {
+      const response = await fetch(path, {
+        method,
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        // A login redirect or a proxy error page is not JSON.
+      }
+      return { ok: response.ok, status: response.status, data };
+    }
+
+    /** React to what the server said; `current` guards against a closed or restarted popup. */
+    function handle(reply, current) {
+      if (current !== run) return;
+      const data = reply.data;
+      if (!data || !data.state) {
+        showError("Сервер вернул неожиданный ответ. Обновите страницу и войдите заново.", true);
+        return;
+      }
+      if (data.state === "done") {
+        showResult(data.meta, !state.waited);
+      } else if (data.state === "running") {
+        if (!state.waited) {
+          state.waited = true;
+          show("loading");
+          startTicking(data.elapsed || 0);
+        }
+        schedulePoll(current, AI_POLL_MS);
+      } else if (data.state === "unconfigured") {
+        showError(data.message || "AI не настроен.", false);
+      } else if (data.state === "error") {
+        showError(data.message || "Не удалось получить ответ модели.", true);
+      } else {
+        // "idle": the server forgot the request (it was restarted). Ask again.
+        begin(current);
+      }
+    }
+
+    function schedulePoll(current, delay) {
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(async () => {
+        if (current !== run) return;
+        if (Date.now() - state.openedAt > AI_GIVE_UP_MS) {
+          showError(
+            "Ответа всё ещё нет. Запрос продолжает работать на сервере: закройте окно и откройте вопрос позже.",
+            false
+          );
+          return;
+        }
+        try {
+          handle(await call("GET", "/ai/" + state.question + "/status"), current);
+        } catch (error) {
+          // A phone that went to sleep or a dropped connection: keep waiting.
+          schedulePoll(current, AI_POLL_RETRY_MS);
+        }
+      }, delay);
+    }
+
+    async function begin(current) {
+      try {
+        handle(await call("POST", "/ai/" + state.question), current);
+      } catch (error) {
+        if (current === run) {
+          showError("Нет связи с сервером. Проверьте соединение и повторите.", true);
+        }
+      }
+    }
+
+    function open(question, imageUrl) {
+      run += 1;
+      stopTimers();
+      state = { question, openedAt: Date.now(), waited: false };
+      el("ai-dialog-question").textContent = question;
+      if (questionImg) {
+        questionImg.removeAttribute("src");
+        if (imageUrl) questionImg.src = imageUrl;
+        const details = questionImg.closest("details");
+        if (details) details.open = false;
+      }
+      frame.src = "about:blank";
+      el("ai-elapsed").textContent = "0 с";
+      show("loading");
+      if (!dialog.open) dialog.showModal();
+      begin(run);
+    }
+
+    function close() {
+      run += 1; // ends the callbacks of the check being followed
+      stopTimers();
+      frame.src = "about:blank";
+    }
+
+    // One listener for every button and table row marked data-ai-open.
+    document.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-ai-open]");
+      if (!trigger || trigger.disabled) return;
+      open(trigger.dataset.question, trigger.dataset.image || "");
+    });
+
+    retryButton.addEventListener("click", () => {
+      if (!state) return;
+      open(state.question, questionImg && questionImg.getAttribute("src"));
+    });
+    el("ai-dialog-close").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", close);
+    // A click on the dimmed area outside the popup closes it.
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     initImageViewers();
     initAnswerToggle();
@@ -372,5 +576,6 @@
     initHotkeys();
     initPreload();
     initMistakesFilter();
+    initAi();
   });
 })();

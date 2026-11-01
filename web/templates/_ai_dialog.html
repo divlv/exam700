@@ -1,0 +1,34 @@
+{# The popup shared by every screen with an "AI" button. Driven by initAi() in app.js.
+   Set `ai_show_question` before including it to add a collapsible picture of the question. #}
+<dialog id="ai-dialog" class="ai-dialog" aria-labelledby="ai-dialog-title">
+  <div class="ai-dialog-head">
+    <h2 id="ai-dialog-title">✨ AI · вопрос №<span id="ai-dialog-question"></span></h2>
+    <button type="button" class="btn btn-sm" id="ai-dialog-close" aria-label="Закрыть">✕</button>
+  </div>
+
+  <div class="ai-dialog-body">
+    <div id="ai-loading" class="ai-loading" role="status" aria-live="polite" hidden>
+      <div class="ai-spinner" aria-hidden="true"></div>
+      <p class="ai-loading-title">Модель разбирает вопрос…</p>
+      <p class="ai-loading-time"><span id="ai-elapsed">0 с</span></p>
+      <p class="muted ai-loading-hint">Это может занять несколько минут. Окно можно закрыть: запрос продолжит работать на сервере, ответ сохранится.</p>
+    </div>
+
+    <div id="ai-error" class="ai-error" role="alert" hidden>
+      <p id="ai-error-text"></p>
+      <button type="button" class="btn btn-primary" id="ai-retry">Повторить</button>
+    </div>
+
+    <div id="ai-result" class="ai-result" hidden>
+      {% if ai_show_question %}
+      <details class="ai-question">
+        <summary>Показать вопрос</summary>
+        <div class="ai-question-scroll"><img id="ai-question-img" alt="Текст вопроса"></div>
+      </details>
+      {% endif %}
+      {# No allow-scripts and no allow-same-origin: whatever the model wrote can neither run nor reach the page. #}
+      <iframe id="ai-frame" class="ai-frame" title="Ответ модели" sandbox referrerpolicy="no-referrer"></iframe>
+      <p class="muted ai-meta" id="ai-meta"></p>
+    </div>
+  </div>
+</dialog>

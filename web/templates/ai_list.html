@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}AI-проверки — AZ-700{% endblock %}
+{% block page_class %} page-wide{% endblock %}
+{% block content %}
+<div class="row row-wrap">
+  <h1>🤖 AI-проверки</h1>
+  <a href="/" class="btn">В меню</a>
+</div>
+
+{% if rows|length == 0 %}
+<div class="section">
+  <p><strong>Пока ни один вопрос не отправлялся на проверку.</strong></p>
+  <p class="muted">Кнопка «✨ AI» есть на экране вопроса и в разборе сессии. Ответ модели сохраняется, и повторно за один и тот же вопрос платить не придётся.</p>
+</div>
+{% else %}
+<p class="muted">Проверено вопросов: {{ rows|length }} · токенов всего: {{ "{:,}".format(total_tokens).replace(",", " ") }}</p>
+
+<table class="responsive ai-table">
+  <thead>
+    <tr>
+      <th><a class="sort-link{% if sort == 'date' %} active{% endif %}" href="{{ date_header.href }}">Дата {{ date_header.arrow }}</a></th>
+      <th><a class="sort-link{% if sort == 'question' %} active{% endif %}" href="{{ question_header.href }}">Вопрос {{ question_header.arrow }}</a></th>
+      <th>О чём вопрос</th>
+      <th>Ответ AI</th>
+      <th>Токены</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set a = row.answer %}
+    <tr class="ai-row" data-ai-open data-question="{{ a.question_id }}"{% if row.image_url %} data-image="{{ row.image_url }}"{% endif %}>
+      <td data-label="Дата" class="ai-date">{{ row.created }}</td>
+      <td data-label="Вопрос"><button type="button" class="btn-link ai-open-link" data-ai-open data-question="{{ a.question_id }}"{% if row.image_url %} data-image="{{ row.image_url }}"{% endif %}>№{{ a.question_id }}</button></td>
+      <td data-label="О чём вопрос" class="ai-summary">{{ a.summary or "—" }}</td>
+      <td data-label="Ответ AI" class="ai-answer-cell">{% if a.answer %}<span class="badge badge-good">{{ a.answer }}</span>{% else %}—{% endif %}</td>
+      <td data-label="Токены" class="ai-tokens">{{ a.input_tokens + a.output_tokens }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% set ai_show_question = true %}
+{% include "_ai_dialog.html" %}
+{% endblock %}
