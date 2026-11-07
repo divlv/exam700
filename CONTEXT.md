@@ -91,12 +91,31 @@ answers at all is *unanswered* in this sense (not to be confused with the
 *unanswered question* above, which the source never answered).
 Russian UI: *журнал ответов*.
 
+**Selection algorithm**:
+How the next question is chosen, set on the settings screen and changeable at
+any moment: **Adaptive** (*адаптивный*, the default) or **Random** (*случайный*).
+It applies from the next question on, also inside a session already running:
+changing it draws the questions still to come again (the one on screen, the
+graded and the postponed stay). Saving the same algorithm changes nothing. A badge
+beside the question number shows the algorithm in force now - not necessarily
+the one that drew the question on screen.
+_Avoid_: "mode" - quick question and test are modes, this is how any of them picks.
+
+**Adaptive**:
+The history-steered algorithm, built on the selection window below: unanswered
+questions first, then those with the most incorrect answers.
+
+**Random**:
+Every available question - not flagged as badly cropped, with an answer in the
+source - is equally likely; the history of answers plays no part. Within one
+session a question still appears at most once.
+
 **Selection window**:
 The ten random available questions that compete each time the next question is
-chosen. A never-answered question in the window wins (random among those);
-otherwise the one with the most incorrect answers wins; every tie is broken at
-random. Correct and partial answers are not told apart. Fewer than ten compete
-when fewer are left.
+chosen by the adaptive algorithm. A never-answered question in the window wins
+(random among those); otherwise the one with the most incorrect answers wins;
+every tie is broken at random. Correct and partial answers are not told apart.
+Fewer than ten compete when fewer are left.
 
 **Grade**:
 The user's own self-assessment of one answer: `correct`, `partial`, or

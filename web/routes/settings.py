@@ -1,4 +1,4 @@
-"""Two settings, exactly as on the desktop screen: default session size and auto-reveal."""
+"""Settings: default session size, auto-reveal and how questions are selected."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ def settings_form(
     conn: sqlite3.Connection = Depends(get_db),
     _: str = Depends(require_login),
     saved: int = 0,
+    redrawn: int = 0,
 ):
     available = questionbank.count_available(conn)
     return templates.TemplateResponse(
@@ -32,7 +33,9 @@ def settings_form(
             ),
             "available": available,
             "auto_reveal": examsession.get_auto_reveal(conn),
+            "selection_algorithm": examsession.get_selection_algorithm(conn),
             "saved": bool(saved),
+            "redrawn": redrawn,
         },
     )
 
@@ -43,6 +46,7 @@ def settings_submit(
     _: str = Depends(require_login),
     default_count: str = Form(...),
     auto_reveal: str | None = Form(None),
+    selection_algorithm: str | None = Form(None),
 ):
     available = max(questionbank.count_available(conn), 1)
     try:
@@ -53,4 +57,10 @@ def settings_submit(
 
     examsession.set_default_question_count(conn, count)
     examsession.set_auto_reveal(conn, auto_reveal is not None)
-    return RedirectResponse(url="/settings?saved=1", status_code=303)
+
+    # A form that does not send the algorithm, or sends something unknown, leaves
+    # the stored choice as it is rather than resetting it.
+    redrawn = 0
+    if selection_algorithm in examsession.SELECTION_ALGORITHMS:
+        redrawn = examsession.set_selection_algorithm(conn, selection_algorithm)
+    return RedirectResponse(url=f"/settings?saved=1&redrawn={redrawn}", status_code=303)

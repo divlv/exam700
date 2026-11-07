@@ -40,6 +40,10 @@ from api.modules.examsession.domain import (
 )
 from api.modules.examsession.services import (
     DEFAULT_QUESTION_COUNT,
+    DEFAULT_SELECTION_ALGORITHM,
+    SELECTION_ADAPTIVE,
+    SELECTION_ALGORITHMS,
+    SELECTION_RANDOM,
     NoQuestionsAvailable,
     SessionRunner,
     ensure_schema,
@@ -47,6 +51,7 @@ from api.modules.examsession.services import (
     get_auto_reveal,
     get_default_question_count,
     get_overview,
+    get_selection_algorithm,
     get_session_detail,
     list_sessions,
     reset_all_sessions,
@@ -54,6 +59,7 @@ from api.modules.examsession.services import (
     resume_session,
     set_auto_reveal,
     set_default_question_count,
+    set_selection_algorithm,
     start_quick_question,
     start_session,
 )
@@ -67,6 +73,7 @@ from api.modules.questionbank.api import (
 __all__ = [
     "AnswerRecord",
     "DEFAULT_QUESTION_COUNT",
+    "DEFAULT_SELECTION_ALGORITHM",
     "ENTRY_GRADED",
     "ENTRY_MARKED",
     "ENTRY_PENDING",
@@ -82,6 +89,9 @@ __all__ = [
     "PARTIAL_CREDIT_PERCENT",
     "PlanEntry",
     "PASS_THRESHOLD_PERCENT",
+    "SELECTION_ADAPTIVE",
+    "SELECTION_ALGORITHMS",
+    "SELECTION_RANDOM",
     "STATUS_ABANDONED",
     "STATUS_COMPLETED",
     "STATUS_IN_PROGRESS",
@@ -94,6 +104,7 @@ __all__ = [
     "get_auto_reveal",
     "get_default_question_count",
     "get_overview",
+    "get_selection_algorithm",
     "get_session_detail",
     "list_sessions",
     "reset_all_sessions",
@@ -101,6 +112,7 @@ __all__ = [
     "resume_session",
     "set_auto_reveal",
     "set_default_question_count",
+    "set_selection_algorithm",
     "start_quick_question",
     "start_session",
 ]

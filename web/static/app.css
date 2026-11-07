@@ -200,6 +200,8 @@ input[type="text"], input[type="password"], input[type="number"], select {
 .option input[type="number"] { width: 100px; margin-left: auto; }
 
 .field { margin-bottom: 16px; }
+/* The heading of a group of options, styled like a label (a radio group has no single input to label). */
+.field-title { font-weight: 600; margin-bottom: 6px; }
 .field .hint { font-weight: 400; color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
 
 /* --------------------------------------------------------------- tables */
@@ -352,6 +354,8 @@ details.answer-row .answer-row-body img { width: 100%; height: auto; border: 1px
 .badge-good { background: var(--good-bg); color: var(--good); }
 .badge-bad { background: var(--bad-bg); color: var(--bad); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
+/* A neutral tag: information, not a state that needs attention. */
+.badge-muted { background: var(--bg); color: var(--muted); border: 1px solid var(--border); font-weight: 600; }
 
 /* ------------------------------------------------------------------ AI */
 

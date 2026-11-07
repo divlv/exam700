@@ -26,6 +26,22 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["PASS_THRESHOLD_PERCENT"] = examsession.PASS_THRESHOLD_PERCENT
 templates.env.globals["PARTIAL_CREDIT"] = examsession.PARTIAL_CREDIT_PERCENT / 100
 
+# How each question-selection algorithm is presented, kept in one place so the
+# settings screen and the badge on the question screen always say the same thing.
+templates.env.globals["SELECTION_ALGORITHMS"] = examsession.SELECTION_ALGORITHMS
+templates.env.globals["SELECTION_LABELS"] = {
+    examsession.SELECTION_ADAPTIVE: {
+        "icon": "🎯",
+        "title": "Адаптивный",
+        "hint": "Сначала вопросы, на которые вы ещё не отвечали, потом те, где больше всего ошибок.",
+    },
+    examsession.SELECTION_RANDOM: {
+        "icon": "🎲",
+        "title": "Случайный",
+        "hint": "Любой вопрос из всей базы с равной вероятностью, история ответов не учитывается.",
+    },
+}
+
 # Shown in every page's footer to tell deployed versions apart.
 templates.env.globals["GIT_COMMIT"] = get_git_commit()
 

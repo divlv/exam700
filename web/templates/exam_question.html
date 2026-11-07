@@ -7,6 +7,9 @@
     <h1>{% if runner.session.kind == "quick" %}⚡ Быстрый вопрос{% else %}Вопрос {{ position }} из {{ runner.total }}{% endif %}</h1>
     <div class="exam-meta">
       №{{ question.id }} в наборе
+      {% set algorithm = SELECTION_LABELS[selection_algorithm] %}
+      · <span class="badge badge-muted" id="selection-badge"
+              title="Как выбираются вопросы: {{ algorithm.title }}. {{ algorithm.hint }} Меняется в настройках и действует со следующего вопроса; открытый сейчас мог быть выбран прежним способом.">{{ algorithm.icon }} {{ algorithm.title }}</span>
       {% if entry.state == "marked" %}
       · <span class="badge badge-warn">🚩 отмечен</span>
       {% elif entry.state == "graded" %}

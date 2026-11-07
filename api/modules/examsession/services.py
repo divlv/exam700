@@ -46,9 +46,18 @@ logger = get_logger(__name__)
 #: Setting keys. Defaults apply until the user changes them on the settings screen.
 SETTING_DEFAULT_COUNT = "default_question_count"
 SETTING_AUTO_REVEAL = "auto_reveal_answer"
+SETTING_SELECTION_ALGORITHM = "selection_algorithm"
 
 DEFAULT_QUESTION_COUNT = 20
 DEFAULT_AUTO_REVEAL = False
+
+#: How the next question is chosen. ``adaptive`` steers by the user's history of
+#: answers (see :func:`_choose_next`); ``random`` draws any available question
+#: with equal probability and ignores the history.
+SELECTION_ADAPTIVE = "adaptive"
+SELECTION_RANDOM = "random"
+SELECTION_ALGORITHMS = (SELECTION_ADAPTIVE, SELECTION_RANDOM)
+DEFAULT_SELECTION_ALGORITHM = SELECTION_ADAPTIVE
 
 #: How many random questions compete each time the next one is chosen.
 SELECTION_WINDOW = 10
@@ -74,22 +83,30 @@ def _credit_for(grade: str) -> int:
 
 
 def _choose_next(
-    conn: sqlite3.Connection, exclude: set[int], rng: random.Random | None
+    conn: sqlite3.Connection,
+    exclude: set[int],
+    rng: random.Random | None,
+    algorithm: str = SELECTION_ADAPTIVE,
 ) -> questionbank.Question | None:
     """
-    Pick the next question to show, steering towards what needs practice.
+    Pick the next question to show.
 
-    A random window of :data:`SELECTION_WINDOW` available questions competes.
-    Any question in it that was never answered wins, picked at random among
-    those; if every one has been answered, the one with the most incorrect
+    With :data:`SELECTION_ADAPTIVE` the choice steers towards what needs
+    practice: a random window of :data:`SELECTION_WINDOW` available questions
+    competes. Any question in it that was never answered wins, picked at random
+    among those; if every one has been answered, the one with the most incorrect
     answers wins, ties again broken at random. Correct and partial answers are
     deliberately not told apart.
+
+    With :data:`SELECTION_RANDOM` every available question outside ``exclude``
+    is equally likely and the history of answers plays no part.
 
     Args:
         conn: Open connection.
         exclude: Questions that must not be chosen, normally the ones this
             session has already drawn.
         rng: Random source, for reproducible tests.
+        algorithm: One of :data:`SELECTION_ALGORITHMS`.
 
     Returns:
         The chosen question, or ``None`` when no available question is left
@@ -101,6 +118,9 @@ def _choose_next(
     ]
     if not candidates:
         return None
+
+    if algorithm == SELECTION_RANDOM:
+        return questionbank.get_question(conn, source.choice(candidates))
 
     window = source.sample(candidates, min(SELECTION_WINDOW, len(candidates)))
     history = repo.answer_history(conn, window)
@@ -447,7 +467,9 @@ class SessionRunner:
         self._marked.discard(question.id)
         self._grades.pop(question.id, None)
 
-        replacement = _choose_next(self._conn, self._seen, self._rng)
+        replacement = _choose_next(
+            self._conn, self._seen, self._rng, get_selection_algorithm(self._conn)
+        )
         if replacement is None:
             # Nothing left to swap in. Drop the flagged question from the plan so
             # the session ends cleanly instead of showing it again.
@@ -471,6 +493,61 @@ class SessionRunner:
             replacement.id,
         )
         return replacement
+
+    def redraw_upcoming(self) -> int:
+        """
+        Choose the questions still to come again, by the algorithm now in force.
+
+        The plan of a session is drawn when it starts, so a change of the
+        selection algorithm would not reach a session already running. This
+        replaces the questions after the current one that have neither a grade
+        nor the postponed mark. The current question stays - the user is looking
+        at it - and so does everything already graded or postponed. Every
+        replacement is a question that is not otherwise in the plan, so the plan
+        keeps its length and stays free of repeats.
+
+        Returns:
+            How many positions now hold a different question than before.
+        """
+        pending = self._pending()
+        upcoming = pending[1:]  # the first pending question is the one on screen
+        if not upcoming:
+            return 0
+
+        algorithm = get_selection_algorithm(self._conn)
+        upcoming_ids = {question.id for question in upcoming}
+        # Everything that stays in the plan may not be drawn again; the old
+        # upcoming questions, being about to be replaced, are candidates again.
+        taken = {question.id for question in self._questions} - upcoming_ids
+        # Positions are fixed before anything is replaced: a replacement may be
+        # a question that stood at another upcoming position, and looking a
+        # question up by value afterwards would find the wrong one.
+        indices = [self._questions.index(question) for question in upcoming]
+
+        changed = 0
+        for index in indices:
+            old = self._questions[index]
+            new = _choose_next(self._conn, taken, self._rng, algorithm)
+            if new is None:
+                # Cannot happen while the old questions are available (they are
+                # always enough candidates), but keeping the old one is safe.
+                taken.add(old.id)
+                continue
+            taken.add(new.id)
+            if new.id != old.id:
+                self._questions[index] = new
+                repo.replace_plan_question(self._conn, self.session.id, index + 1, new.id)
+                changed += 1
+
+        self._seen = {question.id for question in self._questions}
+        logger.info(
+            "session %d: %d of %d upcoming questions drawn again (%s)",
+            self.session.id,
+            changed,
+            len(upcoming),
+            algorithm,
+        )
+        return changed
 
     def finish(self, status: str = STATUS_COMPLETED) -> None:
         """
@@ -538,11 +615,14 @@ def start_session(
     """
     Draw questions and open a session for them.
 
-    The questions are chosen one at a time by :func:`_choose_next`, so the user's
+    The questions are chosen one at a time by :func:`_choose_next`, by the
+    algorithm set on the settings screen. With the adaptive one the user's
     history of answers steers the plan towards unanswered and badly answered
     questions. Choosing them all up front is equivalent to choosing as the
     session goes: a question appears once per session, so nothing answered
-    during the session can change the history of a question still to come.
+    during the session can change the history of a question still to come. A
+    change of the algorithm later in the session is applied by
+    :meth:`SessionRunner.redraw_upcoming`.
 
     Args:
         conn: Open connection.
@@ -567,10 +647,11 @@ def start_session(
             f"Requested {size} questions but only {available} are available"
         )
 
+    algorithm = get_selection_algorithm(conn)
     questions: list[questionbank.Question] = []
     chosen: set[int] = set()
     for _ in range(size):
-        question = _choose_next(conn, chosen, rng)
+        question = _choose_next(conn, chosen, rng, algorithm)
         if question is None:  # cannot happen: the pool was checked above
             raise NoQuestionsAvailable("The question pool ran out while drawing")
         questions.append(question)
@@ -579,11 +660,12 @@ def start_session(
     session = repo.create_session(conn, size, kind)
     repo.insert_plan(conn, session.id, [q.id for q in questions])
     logger.info(
-        "session %d started (%s): %d questions of %d available",
+        "session %d started (%s): %d questions of %d available, selection=%s",
         session.id,
         kind,
         size,
         questionbank.count_available(conn),
+        algorithm,
     )
     return SessionRunner(conn, session, questions, rng)
 
@@ -853,6 +935,65 @@ def get_auto_reveal(conn: sqlite3.Connection) -> bool:
 def set_auto_reveal(conn: sqlite3.Connection, enabled: bool) -> None:
     """Remember whether to reveal the answer immediately."""
     repo.set_setting(conn, SETTING_AUTO_REVEAL, "1" if enabled else "0")
+
+
+def get_selection_algorithm(conn: sqlite3.Connection) -> str:
+    """
+    How the next question is chosen: one of :data:`SELECTION_ALGORITHMS`.
+
+    Adaptive until the user changes it. A value in the database that is not a
+    known algorithm is ignored with a warning rather than failing a session.
+    """
+    raw = repo.get_setting(conn, SETTING_SELECTION_ALGORITHM)
+    if raw is None:
+        return DEFAULT_SELECTION_ALGORITHM
+    if raw not in SELECTION_ALGORITHMS:
+        logger.warning("ignoring unknown %s setting: %r", SETTING_SELECTION_ALGORITHM, raw)
+        return DEFAULT_SELECTION_ALGORITHM
+    return raw
+
+
+def set_selection_algorithm(
+    conn: sqlite3.Connection, algorithm: str, rng: random.Random | None = None
+) -> int:
+    """
+    Choose how questions are selected from now on.
+
+    The change takes effect with the next question, also in a session that is
+    already running: when the algorithm actually changes, the questions still to
+    come in the session in progress are drawn again (see
+    :meth:`SessionRunner.redraw_upcoming`). Saving the algorithm that is already
+    set changes nothing.
+
+    Args:
+        conn: Open connection.
+        algorithm: One of :data:`SELECTION_ALGORITHMS`.
+        rng: Random source for the redraw, for reproducible tests.
+
+    Returns:
+        How many questions of the session in progress were replaced; 0 if the
+        algorithm did not change or there is nothing left to replace.
+
+    Raises:
+        ValueError: If ``algorithm`` is not a known algorithm.
+    """
+    if algorithm not in SELECTION_ALGORITHMS:
+        raise ValueError(f"Unknown selection algorithm: {algorithm!r}")
+    previous = get_selection_algorithm(conn)
+    repo.set_setting(conn, SETTING_SELECTION_ALGORITHM, algorithm)
+    if algorithm == previous:
+        return 0
+
+    logger.info("selection algorithm changed: %s -> %s", previous, algorithm)
+    active = repo.get_active_session(conn)
+    if active is None:
+        return 0
+    runner = resume_session(conn, active.id, rng)
+    if runner is None:
+        return 0
+    changed = runner.redraw_upcoming()
+    conn.commit()
+    return changed
 
 
 # code-documentation-2026-09-06T09:40:00

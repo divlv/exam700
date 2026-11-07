@@ -53,6 +53,7 @@ def _abandon_and_redirect(runner: examsession.SessionRunner) -> RedirectResponse
 
 def _render_question(
     request: Request,
+    conn: sqlite3.Connection,
     runner: examsession.SessionRunner,
     position: int,
     revealed: bool,
@@ -80,6 +81,9 @@ def _render_question(
             "question_image_url": image_url(question.question_image),
             "answer_image_url": image_url(question.answer_image),
             "preload_urls": preload,
+            # Read now, not stored with the question: it is the algorithm in force
+            # for the questions to come, whichever one drew this one.
+            "selection_algorithm": examsession.get_selection_algorithm(conn),
         },
     )
 
@@ -111,7 +115,7 @@ def show_question(
         return done
     if examsession.get_auto_reveal(conn):
         return _redirect("/exam/answer")
-    return _render_question(request, runner, runner.position, False, "/exam", "/exam/answer")
+    return _render_question(request, conn, runner, runner.position, False, "/exam", "/exam/answer")
 
 
 @router.get("/exam/answer")
@@ -125,7 +129,7 @@ def show_answer(
         return _redirect("/")
     if (done := _where_the_pass_stands(runner)) is not None:
         return done
-    return _render_question(request, runner, runner.position, True, "/exam", "/exam/answer")
+    return _render_question(request, conn, runner, runner.position, True, "/exam", "/exam/answer")
 
 
 @router.get("/exam/q/{position}")
@@ -143,7 +147,7 @@ def show_question_at(
     base = f"/exam/q/{position}"
     if examsession.get_auto_reveal(conn):
         return _redirect(f"{base}/answer")
-    return _render_question(request, runner, position, False, base, f"{base}/answer")
+    return _render_question(request, conn, runner, position, False, base, f"{base}/answer")
 
 
 @router.get("/exam/q/{position}/answer")
@@ -159,7 +163,7 @@ def show_answer_at(
     if runner.question_at(position) is None:
         return _redirect("/exam/review")
     base = f"/exam/q/{position}"
-    return _render_question(request, runner, position, True, base, f"{base}/answer")
+    return _render_question(request, conn, runner, position, True, base, f"{base}/answer")
 
 
 @router.get("/exam/review")

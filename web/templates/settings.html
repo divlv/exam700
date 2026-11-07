@@ -7,7 +7,10 @@
 </div>
 
 {% if saved %}
-<div class="alert alert-success">Сохранено.</div>
+<div class="alert alert-success">
+  Сохранено.
+  {% if redrawn %}Следующие вопросы идущей сессии выбраны заново: {{ redrawn }}.{% endif %}
+</div>
 {% endif %}
 
 <form method="post" action="/settings" class="section stack">
@@ -21,6 +24,18 @@
     <input type="checkbox" name="auto_reveal" {% if auto_reveal %}checked{% endif %}>
     Показывать правильный ответ сразу, без нажатия «Показать ответ»
   </label>
+
+  <div class="field" role="radiogroup" aria-labelledby="selection-title">
+    <div class="field-title" id="selection-title">Как выбираются вопросы</div>
+    {% for key in SELECTION_ALGORITHMS %}
+    {% set label = SELECTION_LABELS[key] %}
+    <label class="option">
+      <input type="radio" name="selection_algorithm" value="{{ key }}" {% if key == selection_algorithm %}checked{% endif %}>
+      <span>{{ label.icon }} <strong>{{ label.title }}</strong><br><small class="muted">{{ label.hint }}</small></span>
+    </label>
+    {% endfor %}
+    <div class="hint">Можно переключить в любой момент: со следующего вопроса, в том числе в идущей сессии. Вопрос, который открыт сейчас, остаётся.</div>
+  </div>
 
   <button type="submit" class="btn btn-primary">Сохранить</button>
 </form>
